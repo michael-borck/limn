@@ -13,23 +13,31 @@ The demo (SPEC §3) is a shared, rate-limited, non-storing instance of
   Download instead. Gallery entries live in RAM and expire after 15 min.
 - **Banner** — the page tells visitors it's a demo and how to install.
 
-## Run it — Docker (recommended for a VPS)
+## Run it — Docker Compose (recommended for a VPS)
 
-The repo's `Dockerfile` installs limn from PyPI; config is a mounted
-`limn.yaml`, secrets come from env:
+Everything lives in [`deploy/`](../deploy): a compose file that builds the
+image from this repo, plus templates for config and secrets. On the VPS:
 
 ```bash
-# limn.yaml — self-hosted SwarmUI (free, your GPU):
-#   provider: swarmui
-#   providers:
-#     swarmui:
-#       base_url: https://image.example.org
-#       model: juggernautXL_v9
-#       api_key: "${SWARMUI_TOKEN}"    # only if fronted by auth
-#
-# ...or a cloud provider instead:
-#   provider: gemini                   # imagen-4.0-fast-*: ~$0.02/image
+mkdir limn && cd limn
+base=https://raw.githubusercontent.com/michael-borck/limn/main/deploy
+curl -O $base/docker-compose.yml
+curl -o limn.yaml $base/limn.yaml.example
+curl -o .env $base/.env.example
 
+$EDITOR limn.yaml   # provider + base_url (SwarmUI: free, your GPU)
+$EDITOR .env        # SWARMUI_TOKEN / cloud keys; LIMN_DEMO=1 is preset
+
+docker compose up -d
+```
+
+Remove `LIMN_DEMO` from `.env` to run a private (non-demo) instance
+instead: binding 0.0.0.0 inside the container auto-generates an access
+token — read it with `docker compose logs limn`.
+
+Plain `docker run` works too:
+
+```bash
 docker build -t limn https://github.com/michael-borck/limn.git
 docker run -d --name limn-demo --restart unless-stopped \
   -p 127.0.0.1:5466:5466 \
@@ -38,27 +46,6 @@ docker run -d --name limn-demo --restart unless-stopped \
   -e LIMN_DEMO=1 \
   limn
 ```
-
-Or docker-compose:
-
-```yaml
-services:
-  limn-demo:
-    build: https://github.com/michael-borck/limn.git
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:5466:5466"
-    volumes:
-      - ./limn.yaml:/config/limn.yaml:ro
-    environment:
-      LIMN_DEMO: "1"
-      SWARMUI_TOKEN: ${SWARMUI_TOKEN}   # or GEMINI_API_KEY / OPENAI_API_KEY
-```
-
-Omit `LIMN_DEMO` to run a private (non-demo) instance instead: binding
-0.0.0.0 inside the container auto-generates an access token — read it with
-`docker logs limn-demo` — or pass your own by appending `--token <token>`
-to the run command.
 
 ## Run it — bare (pip + systemd)
 

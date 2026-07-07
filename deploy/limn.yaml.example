@@ -1,0 +1,14 @@
+# Limn provider config for the container (mounted at /config/limn.yaml).
+# Secrets come from .env via ${VAR} — no keys in this file.
+
+provider: swarmui
+
+providers:
+  swarmui:
+    base_url: https://image.example.org
+    api_key: "${SWARMUI_TOKEN}"        # only if fronted by auth
+    # model: juggernautXL_v9           # omit to use the server's loaded model
+
+  # Swap with `provider: gemini` above:
+  gemini:
+    model: imagen-4.0-fast-generate-001   # ~$0.02/image

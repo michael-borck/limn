@@ -1,0 +1,21 @@
+# Limn demo/hosted instance.
+#
+# Quick start on a VPS:
+#   mkdir limn && cd limn
+#   base=https://raw.githubusercontent.com/michael-borck/limn/main/deploy
+#   curl -O $base/docker-compose.yml
+#   curl -o limn.yaml $base/limn.yaml.example
+#   curl -o .env $base/.env.example
+#   $EDITOR limn.yaml .env        # your provider + secrets
+#   docker compose up -d
+#
+# Then point your reverse proxy at 127.0.0.1:5466.
+services:
+  limn:
+    build: https://github.com/michael-borck/limn.git
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5466:5466"
+    volumes:
+      - ./limn.yaml:/config/limn.yaml:ro
+    env_file: .env
