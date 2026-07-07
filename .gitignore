@@ -37,3 +37,4 @@ coverage.xml
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 !desktop/src-tauri/icons/*.png
+!landing/assets/*.webp
