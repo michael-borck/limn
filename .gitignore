@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Config / secrets
+limn.yaml
+.env
+
+# Generated images / scratch
+outputs/
+*.png
+*.jpg
+*.jpeg
+*.webp
+!docs/**/*.png
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.vscode/
+.idea/
