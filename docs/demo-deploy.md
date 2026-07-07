@@ -19,17 +19,22 @@ The repo's `Dockerfile` installs limn from PyPI; config is a mounted
 `limn.yaml`, secrets come from env:
 
 ```bash
-# limn.yaml:
-#   provider: gemini
+# limn.yaml — self-hosted SwarmUI (free, your GPU):
+#   provider: swarmui
 #   providers:
-#     gemini:
-#       model: imagen-4.0-fast-generate-001   # ~$0.02/image
+#     swarmui:
+#       base_url: https://image.example.org
+#       model: juggernautXL_v9
+#       api_key: "${SWARMUI_TOKEN}"    # only if fronted by auth
+#
+# ...or a cloud provider instead:
+#   provider: gemini                   # imagen-4.0-fast-*: ~$0.02/image
 
 docker build -t limn https://github.com/michael-borck/limn.git
 docker run -d --name limn-demo --restart unless-stopped \
   -p 127.0.0.1:5466:5466 \
   -v ./limn.yaml:/config/limn.yaml:ro \
-  -e GEMINI_API_KEY=... \
+  -e SWARMUI_TOKEN=... \
   -e LIMN_DEMO=1 \
   limn
 ```
@@ -47,7 +52,7 @@ services:
       - ./limn.yaml:/config/limn.yaml:ro
     environment:
       LIMN_DEMO: "1"
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      SWARMUI_TOKEN: ${SWARMUI_TOKEN}   # or GEMINI_API_KEY / OPENAI_API_KEY
 ```
 
 Omit `LIMN_DEMO` to run a private (non-demo) instance instead: binding
@@ -60,13 +65,14 @@ to the run command.
 ```bash
 pip install "limn[serve]"
 
-# /etc/limn.yaml (or a config next to the working dir):
-#   provider: gemini
+# limn.yaml next to the working dir (or ~/.limn.yaml):
+#   provider: swarmui
 #   providers:
-#     gemini:
-#       model: imagen-4.0-fast-generate-001   # ~$0.02/image
+#     swarmui:
+#       base_url: https://image.example.org
+#       model: juggernautXL_v9
 
-GEMINI_API_KEY=... limn serve --demo --host 127.0.0.1 --port 5466
+limn serve --demo --host 127.0.0.1 --port 5466
 # or: LIMN_DEMO=1 limn serve ...
 ```
 
@@ -95,9 +101,14 @@ PrivateTmp=true
 WantedBy=multi-user.target
 ```
 
-## Cost ceiling
+## Cost / load ceiling
 
-Worst case per IP: 10 images/hour. With Imagen Fast (~$0.02/image) that is
-~$0.20/hour per abusive IP. Watch your provider's billing dashboard; drop
-`DEMO_IMAGES_PER_HOUR` in `limn/serve.py` (or front with proxy rate limits)
-if needed.
+Worst case per IP: 10 images/hour.
+
+- **SwarmUI (self-hosted):** no dollar cost — the limit protects your GPU
+  queue instead. Each demo image is one ≤1024px job on your server.
+- **Cloud (Imagen Fast ~$0.02/image):** ~$0.20/hour per abusive IP; watch
+  the provider's billing dashboard.
+
+Drop `DEMO_IMAGES_PER_HOUR` in `limn/serve.py` (or add proxy-level rate
+limits) if needed.

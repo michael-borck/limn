@@ -5,7 +5,7 @@
 #   docker build -t limn .
 #   docker run -d -p 5466:5466 \
 #     -v ./limn.yaml:/config/limn.yaml:ro \
-#     -e GEMINI_API_KEY=... \
+#     -e SWARMUI_TOKEN=... \
 #     -e LIMN_DEMO=1 \
 #     limn
 #

@@ -25,6 +25,15 @@ limn "a red bicycle against a brick wall" -o bike.png
 Pick whichever provider you already have:
 
 ```bash
+# Self-hosted SwarmUI (free, your GPU)
+export SWARMUI_BASE_URL=https://image.example.org
+export SWARMUI_TOKEN=...   # only if fronted by auth
+limn "watercolour fox" --provider swarmui
+
+# Any OpenAI-compatible /v1/images endpoint (LocalAI, ...)
+export OPENAI_BASE_URL=http://localhost:8080/v1
+limn "watercolour fox" --provider openai-compatible
+
 # Google Imagen (cheap, ~$0.02/image on the Fast tier)
 export GEMINI_API_KEY=...
 limn "watercolour fox" --provider gemini
@@ -32,14 +41,6 @@ limn "watercolour fox" --provider gemini
 # OpenAI Images
 export OPENAI_API_KEY=...
 limn "watercolour fox" --provider openai
-
-# Self-hosted SwarmUI
-export SWARMUI_BASE_URL=https://image.example.org
-limn "watercolour fox" --provider swarmui
-
-# Any OpenAI-compatible /v1/images endpoint (LocalAI, ...)
-export OPENAI_BASE_URL=http://localhost:8080/v1
-limn "watercolour fox" --provider openai-compatible
 ```
 
 Then set your provider once so you never pass `--provider` again:
