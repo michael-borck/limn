@@ -1,0 +1,5 @@
+# The image installs limn from PyPI; the build context needs only the
+# Dockerfile. Also keeps macOS AppleDouble (._*) files on this exFAT drive
+# from breaking the context upload.
+*
+!Dockerfile

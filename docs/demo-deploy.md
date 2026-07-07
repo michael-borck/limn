@@ -13,7 +13,49 @@ The demo (SPEC §3) is a shared, rate-limited, non-storing instance of
   Download instead. Gallery entries live in RAM and expire after 15 min.
 - **Banner** — the page tells visitors it's a demo and how to install.
 
-## Run it
+## Run it — Docker (recommended for a VPS)
+
+The repo's `Dockerfile` installs limn from PyPI; config is a mounted
+`limn.yaml`, secrets come from env:
+
+```bash
+# limn.yaml:
+#   provider: gemini
+#   providers:
+#     gemini:
+#       model: imagen-4.0-fast-generate-001   # ~$0.02/image
+
+docker build -t limn https://github.com/michael-borck/limn.git
+docker run -d --name limn-demo --restart unless-stopped \
+  -p 127.0.0.1:5466:5466 \
+  -v ./limn.yaml:/config/limn.yaml:ro \
+  -e GEMINI_API_KEY=... \
+  -e LIMN_DEMO=1 \
+  limn
+```
+
+Or docker-compose:
+
+```yaml
+services:
+  limn-demo:
+    build: https://github.com/michael-borck/limn.git
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5466:5466"
+    volumes:
+      - ./limn.yaml:/config/limn.yaml:ro
+    environment:
+      LIMN_DEMO: "1"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+```
+
+Omit `LIMN_DEMO` to run a private (non-demo) instance instead: binding
+0.0.0.0 inside the container auto-generates an access token — read it with
+`docker logs limn-demo` — or pass your own by appending `--token <token>`
+to the run command.
+
+## Run it — bare (pip + systemd)
 
 ```bash
 pip install "limn[serve]"
