@@ -1,0 +1,119 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "limn"
+version = "0.1.0"
+description = "A small, privacy-first text-to-image tool: type a prompt, get an image. Bring your own provider."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Michael Borck", email = "michael.borck@curtin.edu.au" },
+]
+keywords = ["ai", "image", "text-to-image", "cli", "swarmui", "imagen", "dall-e"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+# Web UI (limn serve) — M2
+serve = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+]
+
+[project.scripts]
+limn = "limn.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/michael-borck/limn"
+Repository = "https://github.com/michael-borck/limn"
+Issues = "https://github.com/michael-borck/limn/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/limn"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # function calls in argument defaults (Typer idiom)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["limn"]
+
+[tool.basedpyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__", "**/._*"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.10"
+pythonPlatform = "All"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportUnusedClass = true
+reportUnusedFunction = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=limn",
+    "--cov-report=term-missing",
+]
+
+[tool.coverage.run]
+source = ["limn"]
+branch = true
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.29.4",
+    "build>=1.2.2",
+    "pytest>=8.4.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.12.0",
+    "twine>=6.1.0",
+]

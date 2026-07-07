@@ -27,3 +27,8 @@ outputs/
 # Editors
 .vscode/
 .idea/
+
+# Test artifacts
+.coverage
+htmlcov/
+coverage.xml

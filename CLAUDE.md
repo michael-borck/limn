@@ -13,29 +13,42 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
-**Specification only — no implementation yet.** The repo contains `SPEC.md`,
-`README.md`, `.gitignore`, and this file. Nothing has been built.
+**M1 (CLI) built and published to PyPI as `limn` 0.1.0.** The package lives in
+`src/limn/`: `config.py` (layered ~/.limn.yaml < ./limn.yaml < flags, `${VAR}`
+expansion, per-provider `providers:` overlays), `providers/` (swarmui,
+openai, openai-compatible, gemini/imagen — all plain `requests`, no SDKs),
+`core.py` (generate + save with slug naming / no-overwrite), `cli.py` (Typer,
+single command). Tests in `tests/` (45, all green), basedpyright zero errors,
+ruff clean. Verified end-to-end against the real Imagen API.
 
-## Where to start (Milestone 1 — CLI)
+Design choices made during M1 (beyond SPEC):
+- Providers raise `ProviderError` and the CLI exits non-zero — **no** silent
+  text-image fallback like slide-stream (that only makes sense in a video
+  pipeline).
+- `openai`/`dalle` and `openai-compatible` share one class; the compatible
+  variant *requires* `base_url` so a stray OPENAI_API_KEY never sends prompts
+  to the wrong server.
+- Imagen (Gemini API) gets nearest-aspect-ratio mapping from `--size`;
+  seed/negative are warn-and-ignore on backends that lack them (OpenAI,
+  Gemini API).
 
-Per `SPEC.md` §9, M1 is the CLI + provider layer:
+## Machine gotcha (this repo lives on an exFAT drive)
 
-1. Scaffold the `limn` Python package (`pyproject.toml`, `src/limn/`), Python
-   3.10+, Typer CLI. Mirror slide-stream's tooling: `uv`, `ruff`,
-   `basedpyright` (zero errors), `pytest`.
-2. Port a **thin, standalone** provider layer (do NOT depend on slide-stream):
-   start with `swarmui` (self-hosted, native API) and one cloud provider
-   (`gemini`/Imagen or `openai`/DALL·E). Each: prompt (+ size/count/seed/
-   negative) → image bytes. Reference implementations live in
-   `../slide-stream/src/slide_stream/providers/images.py`.
-3. Layered config (`~/.limn.yaml` < `./limn.yaml` < CLI flags), `${VAR}`
-   secret expansion — same pattern as slide-stream's `config_loader.py`.
-4. `limn "a red bicycle" -o out.png` with `--provider/--model/--size/--count/
-   --seed/--negative/--out`. Print saved path(s).
-5. Publish to PyPI (`pip install limn`). Slide-stream uses **twine** (not
-   `uv publish`); assume the same here unless told otherwise.
+`uv sync` with a local `.venv` fails here: macOS writes AppleDouble `._*`
+files (SIP-protected `com.apple.provenance` xattr) into binary wheels (ruff,
+basedpyright) and uv's RECORD validation rejects them. Workaround used:
 
-Then M2 (web UI, like `slide-stream serve`), M3 (demo), M4 (Tauri desktop).
+```bash
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/limn"   # venv on internal disk
+uv sync --all-groups
+uv run --no-sync ruff check src tests && uv run --no-sync basedpyright && uv run --no-sync pytest
+```
+
+## Next milestones
+
+M2 (web UI, `limn serve` behind a `[serve]` extra, like `slide-stream serve`),
+M3 (hosted demo), M4 (Tauri desktop). Release flow: bump version in
+`pyproject.toml` + `src/limn/__init__.py`, `uv build`, `twine upload dist/*`.
 
 ## Key decisions already made
 
