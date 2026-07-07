@@ -87,6 +87,77 @@ def test_swarmui_full_flow(monkeypatch):
     assert gen_payload["model"] == "juggernautXL_v9"
 
 
+def test_swarmui_list_models(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        assert url.endswith("/API/ListModels")
+        assert (json or {}).get("subtype") == "Stable-Diffusion"
+        return FakeResponse(
+            {
+                "folders": [],
+                "files": [
+                    {"name": "juggernautXL_v9.safetensors"},
+                    {"name": "Official/sd_xl_base_1.0.safetensors"},
+                    {"name": "weird-model.ckpt"},
+                ],
+            }
+        )
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    request = GenerateRequest(prompt="", base_url="https://s.example.org")
+    assert SwarmUIProvider().list_models(request) == [
+        "juggernautXL_v9",
+        "Official/sd_xl_base_1.0",
+        "weird-model",
+    ]
+
+
+def test_openai_list_models_filters_images(monkeypatch):
+    def fake_get(url, headers=None, timeout=None):
+        assert url == "https://api.openai.com/v1/models"
+        return FakeResponse(
+            {"data": [{"id": "gpt-4o"}, {"id": "dall-e-3"}, {"id": "gpt-image-1"}]}
+        )
+
+    monkeypatch.setattr("limn.providers.openai_compat.requests.get", fake_get)
+    request = GenerateRequest(prompt="", api_key="k")
+    assert OpenAIProvider().list_models(request) == ["dall-e-3", "gpt-image-1"]
+
+
+def test_openai_compatible_list_models_unfiltered(monkeypatch):
+    def fake_get(url, headers=None, timeout=None):
+        return FakeResponse({"data": [{"id": "sdxl"}, {"id": "flux-schnell"}]})
+
+    monkeypatch.setattr("limn.providers.openai_compat.requests.get", fake_get)
+    request = GenerateRequest(prompt="", base_url="http://localhost:8080/v1")
+    assert OpenAICompatibleProvider().list_models(request) == [
+        "flux-schnell",
+        "sdxl",
+    ]
+
+
+def test_gemini_list_models(monkeypatch):
+    def fake_get(url, params=None, headers=None, timeout=None):
+        assert url.endswith("/models")
+        return FakeResponse(
+            {
+                "models": [
+                    {"name": "models/gemini-2.5-pro"},
+                    {"name": "models/imagen-4.0-fast-generate-001"},
+                    {"name": "models/imagen-4.0-ultra-generate-001"},
+                ]
+            }
+        )
+
+    monkeypatch.setattr("limn.providers.gemini.requests.get", fake_get)
+    request = GenerateRequest(prompt="", api_key="g")
+    assert GeminiProvider().list_models(request) == [
+        "imagen-4.0-fast-generate-001",
+        "imagen-4.0-ultra-generate-001",
+    ]
+
+
 def test_swarmui_requires_base_url():
     with pytest.raises(ProviderError, match="base_url"):
         SwarmUIProvider().generate(GenerateRequest(prompt="a fox"))

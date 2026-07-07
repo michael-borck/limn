@@ -12,6 +12,7 @@ from limn import __version__
 from limn.config import ConfigurationError, load_config, resolve_settings
 from limn.config import save_example_config as _save_example_config
 from limn.core import generate as _generate
+from limn.core import list_models as _list_models
 from limn.core import parse_size, save_images
 from limn.providers import ProviderError
 
@@ -156,6 +157,37 @@ def generate(
         for path in paths:
             console.print(f"Saved: [bold green]{path}[/bold green]")
 
+    except (ConfigurationError, ProviderError, ValueError) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code=1) from None
+
+
+@app.command()
+def models(
+    provider: str = typer.Option(
+        None, "--provider", "-p", help="Provider to ask (default: configured).",
+        show_default=False,
+    ),
+    config: str = typer.Option(
+        None, "--config", "-c", help="Config file (default: ./limn.yaml).",
+        show_default=False,
+    ),
+) -> None:
+    """List the models your provider offers."""
+    try:
+        cfg = load_config(config)
+        provider_name = provider or cfg.get("provider")
+        if not provider_name:
+            err_console.print(
+                "No provider configured. Pass --provider or set one in ~/.limn.yaml."
+            )
+            raise typer.Exit(code=2)
+        settings = resolve_settings(cfg, str(provider_name))
+        names = _list_models(settings)
+        if not names:
+            console.print("[dim]No models reported.[/dim]")
+        for name in names:
+            console.print(name)
     except (ConfigurationError, ProviderError, ValueError) as e:
         err_console.print(str(e))
         raise typer.Exit(code=1) from None

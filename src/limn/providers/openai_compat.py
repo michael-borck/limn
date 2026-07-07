@@ -52,6 +52,34 @@ class OpenAIProvider(ImageProvider):
             )
         return api_key
 
+    def _filter_models(self, ids: list[str]) -> list[str]:
+        # The real OpenAI /models lists every chat model too; keep image ones.
+        return [i for i in ids if "image" in i or "dall-e" in i]
+
+    def list_models(self, request: GenerateRequest) -> list[str]:
+        base_url = self._base_url(request)
+        api_key = self._api_key(request)
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        try:
+            response = requests.get(
+                f"{base_url}/models", headers=headers, timeout=30
+            )
+            if not response.ok:
+                raise ProviderError(
+                    f"{self.name} returned {response.status_code}: "
+                    f"{_error_detail(response)}"
+                )
+            ids = [
+                str(item["id"])
+                for item in response.json().get("data") or []
+                if isinstance(item, dict) and item.get("id")
+            ]
+            return self._filter_models(sorted(ids))
+        except ProviderError:
+            raise
+        except (requests.RequestException, ValueError) as e:
+            raise ProviderError(f"{self.name} error: {e}") from e
+
     def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
         self.warn_unsupported(request)
         base_url = self._base_url(request)
@@ -113,6 +141,10 @@ class OpenAICompatibleProvider(OpenAIProvider):
     default_base_url = None  # must be configured; never default to real OpenAI
     default_model = "stable-diffusion"
     require_api_key = False  # local servers usually don't check
+
+    def _filter_models(self, ids: list[str]) -> list[str]:
+        # A local server lists exactly what it hosts; don't second-guess it.
+        return ids
 
     def _base_url(self, request: GenerateRequest) -> str:
         base_url = request.base_url or os.getenv("OPENAI_BASE_URL")

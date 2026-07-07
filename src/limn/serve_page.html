@@ -119,6 +119,13 @@
         <summary>Options</summary>
         <div class="opts">
           <label>provider <select id="provider"><option value="">(default)</option></select></label>
+          <label>model
+            <span style="display:flex;gap:.25rem">
+              <input id="model" list="model-list" placeholder="(default)">
+              <button id="load-models" type="button" title="Ask the provider for its models">⟳</button>
+            </span>
+            <datalist id="model-list"></datalist>
+          </label>
           <label>size <input id="size" placeholder="1024x1024"></label>
           <label>count <input id="count" type="number" min="1" max="10" value="1"></label>
           <label>seed <input id="seed" type="number" placeholder="random"></label>
@@ -213,6 +220,7 @@ async function generate(promptOverride, dropSeed) {
 
   const payload = { prompt, count: parseInt($("count").value || "1", 10) };
   if ($("provider").value) payload.provider = $("provider").value;
+  if ($("model").value.trim()) payload.model = $("model").value.trim();
   if ($("size").value.trim()) payload.size = $("size").value.trim();
   if (!dropSeed && $("seed").value !== "") payload.seed = parseInt($("seed").value, 10);
   if ($("negative").value.trim()) payload.negative = $("negative").value.trim();
@@ -243,6 +251,30 @@ async function generate(promptOverride, dropSeed) {
 }
 
 $("go").onclick = () => generate();
+$("load-models").onclick = async () => {
+  clearError();
+  const btn = $("load-models");
+  btn.disabled = true;
+  try {
+    const body = {};
+    if ($("provider").value) body.provider = $("provider").value;
+    const { models } = await api("/api/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    $("model-list").innerHTML = "";
+    for (const name of models) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      $("model-list").appendChild(opt);
+    }
+    if (!models.length) showError("The provider reported no models.");
+    else $("model").focus();
+  } catch (err) {
+    showError("Could not list models: " + err.message);
+  } finally { btn.disabled = false; }
+};
 $("prompt").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
 });

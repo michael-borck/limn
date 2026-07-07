@@ -19,21 +19,68 @@ from limn.providers.base import (
     ProviderError,
 )
 
+# Model files are listed with their weight-file extension, but the generate
+# API wants the bare name (e.g. "juggernautXL_v9", not "...safetensors").
+_WEIGHT_EXTENSIONS = (".safetensors", ".ckpt", ".sft", ".gguf")
+
+
+def _strip_weight_extension(name: str) -> str:
+    for ext in _WEIGHT_EXTENSIONS:
+        if name.endswith(ext):
+            return name[: -len(ext)]
+    return name
+
 
 class SwarmUIProvider(ImageProvider):
     name = "swarmui"
 
-    def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
+    def _connection(self, request: GenerateRequest) -> tuple[str, dict[str, str]]:
         base_url = request.base_url or os.getenv("SWARMUI_BASE_URL")
         if not base_url:
             raise ProviderError(
                 "SwarmUI needs a base_url (config 'base_url', "
                 "providers.swarmui.base_url, or SWARMUI_BASE_URL)."
             )
-        base_url = base_url.rstrip("/")
-
         api_key = request.api_key or os.getenv("SWARMUI_TOKEN")
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        return base_url.rstrip("/"), headers
+
+    def list_models(self, request: GenerateRequest) -> list[str]:
+        base_url, headers = self._connection(request)
+        try:
+            session = requests.post(
+                f"{base_url}/API/GetNewSession",
+                json={},
+                headers=headers,
+                timeout=30,
+            )
+            session.raise_for_status()
+            session_id = session.json()["session_id"]
+
+            response = requests.post(
+                f"{base_url}/API/ListModels",
+                json={
+                    "session_id": session_id,
+                    "path": "",
+                    "depth": 5,
+                    "subtype": "Stable-Diffusion",
+                    "sortBy": "Name",
+                },
+                headers=headers,
+                timeout=60,
+            )
+            response.raise_for_status()
+            files = response.json().get("files") or []
+            return [
+                _strip_weight_extension(str(f["name"]))
+                for f in files
+                if isinstance(f, dict) and f.get("name")
+            ]
+        except (requests.RequestException, KeyError, ValueError) as e:
+            raise ProviderError(f"SwarmUI error: {e}") from e
+
+    def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
+        base_url, headers = self._connection(request)
 
         try:
             session = requests.post(

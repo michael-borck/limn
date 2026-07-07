@@ -29,6 +29,7 @@ from limn.config import ConfigurationError, resolve_settings
 from limn.core import (
     generate,
     image_extension,
+    list_models,
     parse_size,
     slugify,
     unique_path,
@@ -77,6 +78,12 @@ class GeneratePayload(BaseModel):
 
 class SavePayload(BaseModel):
     filename: str | None = None
+
+
+class ModelsPayload(BaseModel):
+    provider: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
 
 
 def _meta(item: SessionImage) -> dict[str, Any]:
@@ -147,6 +154,18 @@ def create_app(
     # No docs/openapi endpoints: this is an app page, not a public API.
     app = FastAPI(title="Limn", docs_url=None, redoc_url=None, openapi_url=None)
 
+    # The desktop shell's settings sheet lives on the tauri:// origin and
+    # talks to this server (e.g. to list models). Only those app-internal
+    # origins are allowed; browsers are unaffected.
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["tauri://localhost", "http://tauri.localhost"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     def _supplied_token(request: Request) -> str | None:
         auth = request.headers.get("authorization", "")
         if auth.startswith("Bearer "):
@@ -190,6 +209,29 @@ def create_app(
                 "ttl_minutes": int(demo_ttl_seconds // 60),
             }
         return info
+
+    @app.post("/api/models", dependencies=[Depends(require_token)])
+    def api_models(payload: ModelsPayload | None = None) -> dict[str, Any]:
+        overrides = payload or ModelsPayload()
+        # Demo ignores overrides for the same reason generate does: visitors
+        # must not use the host as a proxy to other backends/keys.
+        provider_name = (
+            config.get("provider")
+            if demo
+            else overrides.provider or config.get("provider")
+        )
+        if not provider_name:
+            raise HTTPException(status_code=400, detail="No provider configured.")
+        settings = resolve_settings(config, str(provider_name))
+        if not demo:
+            if overrides.base_url:
+                settings["base_url"] = overrides.base_url
+            if overrides.api_key:
+                settings["api_key"] = overrides.api_key
+        try:
+            return {"models": list_models(settings), "provider": provider_name}
+        except (ProviderError, ConfigurationError, ValueError) as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
 
     @app.get("/api/images", dependencies=[Depends(require_token)])
     def api_list() -> dict[str, Any]:

@@ -13,6 +13,30 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.0: provider model listing.** `list_models()` on every provider
+(SwarmUI /API/ListModels with weight-extension stripping — the generate API
+wants bare names like "juggernautXL_v9"; OpenAI /models filtered to image
+models, compatible unfiltered; Gemini /models filtered to imagen*), CLI
+`limn models`, web UI ⟳ next to the model field, POST /api/models (demo
+ignores overrides — no proxying). serve has CORS for tauri://localhost only,
+so the desktop Settings sheet can call the sidecar. NOTE: SwarmUI *requires*
+a model on generate. Desktop pins limn via LIMN_VERSION + a venv marker file
+that auto-upgrades existing runtimes when the pin changes.
+
+**M4 (desktop) built: Tauri shell in `desktop/`, CI-built installers.**
+Architecture: Rust shell (tauri v2, vanilla-HTML frontend, no node/npm) that
+(1) bootstraps a private runtime on first launch — finds/downloads `uv`,
+`uv venv --python 3.12` in app-data (uv downloads managed CPython, no system
+Python), installs `limn[serve]==LIMN_VERSION` (const in main.rs — bump with
+PyPI releases); (2) spawns `limn serve` on a random localhost port as a
+sidecar (killed on RunEvent::Exit), `--out-dir` = Pictures/Limn; (3) shows
+the served UI in an iframe under a header bar with a ⚙ BYOK Settings sheet
+that reads/writes ~/.limn.yaml (merge-preserving, chmod 600) — shown
+automatically when no provider is configured. Release: tag `desktop-v*` →
+`.github/workflows/desktop.yml` (tauri-action) builds unsigned macOS
+arm64+x86_64 / Windows / Linux installers into a draft GitHub release.
+Local dev on this machine: set CARGO_TARGET_DIR to internal disk (exFAT).
+
 **M3 (demo mode) done: shipped in 0.3.0.** `limn serve --demo` (or
 LIMN_DEMO=1): tokenless but bounded — 10 images/hour/IP (X-Forwarded-For
 aware), provider+model locked to server config (visitors can't route spend),

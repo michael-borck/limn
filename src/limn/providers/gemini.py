@@ -54,9 +54,7 @@ class GeminiProvider(ImageProvider):
         # prompt (both are Vertex-only features).
         return [("--seed", request.seed), ("--negative", request.negative)]
 
-    def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
-        self.warn_unsupported(request)
-
+    def _api_key(self, request: GenerateRequest) -> str:
         api_key = (
             request.api_key
             or os.getenv("GEMINI_API_KEY")
@@ -67,6 +65,37 @@ class GeminiProvider(ImageProvider):
                 "Gemini needs an API key (config 'api_key', GEMINI_API_KEY, "
                 "or GOOGLE_API_KEY)."
             )
+        return api_key
+
+    def list_models(self, request: GenerateRequest) -> list[str]:
+        api_key = self._api_key(request)
+        base_url = (request.base_url or GEMINI_API_URL).rstrip("/")
+        try:
+            response = requests.get(
+                f"{base_url}/models",
+                params={"pageSize": "1000"},
+                headers={"x-goog-api-key": api_key},
+                timeout=30,
+            )
+            if not response.ok:
+                raise ProviderError(
+                    f"Imagen returned {response.status_code}: "
+                    f"{_error_detail(response)}"
+                )
+            names = [
+                str(m["name"]).removeprefix("models/")
+                for m in response.json().get("models") or []
+                if isinstance(m, dict) and m.get("name")
+            ]
+            return sorted(n for n in names if "imagen" in n.lower())
+        except ProviderError:
+            raise
+        except (requests.RequestException, ValueError) as e:
+            raise ProviderError(f"Imagen error: {e}") from e
+
+    def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
+        self.warn_unsupported(request)
+        api_key = self._api_key(request)
 
         base_url = (request.base_url or GEMINI_API_URL).rstrip("/")
         model = request.model or DEFAULT_MODEL

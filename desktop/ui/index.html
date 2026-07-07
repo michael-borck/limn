@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Limn</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1f24; --muted: #6b7280;
+    --line: #e3e1dc; --accent: #7c5cff; --accent-ink: #ffffff; --danger: #c2452d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --panel: #181b21; --ink: #e8e6e1; --muted: #8b93a1;
+      --line: #262a32; --accent: #9d85ff; --accent-ink: #14121f; --danger: #e06c50;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .5rem .9rem; border-bottom: 1px solid var(--line);
+    background: var(--panel); user-select: none; flex: none;
+  }
+  header .title { font-weight: 650; }
+  #status { color: var(--muted); font-size: .85rem; flex: 1; }
+  header button {
+    font: inherit; border: 1px solid var(--line); border-radius: 7px;
+    background: transparent; color: var(--ink); padding: .3rem .7rem; cursor: pointer;
+  }
+  header button:hover { border-color: var(--muted); }
+  main { flex: 1; position: relative; min-height: 0; }
+  iframe#app {
+    width: 100%; height: 100%; border: 0; display: none; background: var(--bg);
+  }
+  /* Boot / settings overlay */
+  #overlay {
+    position: absolute; inset: 0; overflow: auto; padding: 2.5rem 1.5rem;
+    display: flex; justify-content: center; background: var(--bg);
+  }
+  .sheet { width: 100%; max-width: 480px; }
+  .sheet h1 { font-size: 1.35rem; margin: 0 0 .25rem; }
+  .sheet .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1.1rem 1.2rem;
+  }
+  label { display: block; font-size: .8rem; color: var(--muted); margin: .8rem 0 .25rem; }
+  label:first-child { margin-top: 0; }
+  input, select {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: .45rem .6rem;
+  }
+  .actions { display: flex; gap: .6rem; margin-top: 1.1rem; align-items: center; }
+  .primary {
+    font: inherit; font-weight: 600; border: 0; border-radius: 8px;
+    background: var(--accent); color: var(--accent-ink);
+    padding: .5rem 1.2rem; cursor: pointer;
+  }
+  .ghost {
+    font: inherit; border: 1px solid var(--line); border-radius: 8px;
+    background: transparent; color: var(--ink); padding: .5rem .9rem; cursor: pointer;
+  }
+  #err { color: var(--danger); font-size: .85rem; margin-top: .8rem; white-space: pre-wrap; }
+  .note { color: var(--muted); font-size: .78rem; margin-top: 1rem; }
+  .boot { text-align: center; margin-top: 18vh; color: var(--muted); }
+  .boot .dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+    display: inline-block; margin-right: .5rem; animation: pulse 1.1s infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">🖼️ Limn</span>
+  <span id="status">starting…</span>
+  <button id="btn-settings" title="Provider settings">⚙ Settings</button>
+</header>
+<main>
+  <iframe id="app" title="Limn"></iframe>
+  <div id="overlay">
+    <div class="sheet">
+      <div id="boot" class="boot"><span class="dot"></span><span id="boot-msg">Starting Limn…</span></div>
+
+      <div id="settings" class="hidden">
+        <h1>Your image provider</h1>
+        <p class="sub">Bring your own — prompts go only to the provider you set here. Saved to <code>~/.limn.yaml</code>.</p>
+        <div class="card">
+          <label for="provider">Provider</label>
+          <select id="provider">
+            <option value="swarmui">SwarmUI (self-hosted)</option>
+            <option value="openai-compatible">OpenAI-compatible endpoint (LocalAI, …)</option>
+            <option value="openai">OpenAI (DALL·E / gpt-image)</option>
+            <option value="gemini">Google Imagen</option>
+          </select>
+
+          <label for="base_url" id="l-base">Server URL</label>
+          <input id="base_url" placeholder="https://image.example.org">
+
+          <label for="api_key" id="l-key">API key / bearer token</label>
+          <input id="api_key" type="password" placeholder="optional for self-hosted">
+
+          <label for="model">Model <span style="font-weight:normal">(SwarmUI requires one)</span></label>
+          <div style="display:flex; gap:.4rem">
+            <input id="model" list="model-list" placeholder="server default">
+            <button class="ghost" id="btn-models" type="button"
+                    title="Ask this provider which models it offers">Fetch models</button>
+          </div>
+          <datalist id="model-list"></datalist>
+
+          <div class="actions">
+            <button class="primary" id="btn-save">Save &amp; start</button>
+            <button class="ghost hidden" id="btn-cancel">Cancel</button>
+          </div>
+          <div id="err"></div>
+        </div>
+        <p class="note">Privacy: no account, no telemetry. The only network traffic is the
+        generation request to this provider. Images are saved to your Pictures/Limn folder.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+const $ = id => document.getElementById(id);
+
+let serverPort = null;
+let settingsOpen = false;
+
+listen("status", e => { $("status").textContent = e.payload; $("boot-msg").textContent = e.payload; });
+
+function showApp() {
+  $("overlay").classList.add("hidden");
+  $("app").style.display = "block";
+  $("status").textContent = "ready — local server on 127.0.0.1:" + serverPort;
+}
+
+function showSettings(cancellable) {
+  settingsOpen = true;
+  $("overlay").classList.remove("hidden");
+  $("boot").classList.add("hidden");
+  $("settings").classList.remove("hidden");
+  $("btn-cancel").classList.toggle("hidden", !cancellable);
+  $("err").textContent = "";
+}
+
+function showBoot(msg) {
+  $("overlay").classList.remove("hidden");
+  $("settings").classList.add("hidden");
+  $("boot").classList.remove("hidden");
+  if (msg) $("boot-msg").textContent = msg;
+}
+
+async function loadSettingsForm() {
+  const s = await invoke("get_settings");
+  if (s.provider) $("provider").value = s.provider;
+  $("base_url").value = s.base_url || "";
+  $("api_key").value = s.api_key || "";
+  $("model").value = s.model || "";
+  syncFields();
+  return s;
+}
+
+function syncFields() {
+  const p = $("provider").value;
+  const needsUrl = p === "swarmui" || p === "openai-compatible";
+  $("l-base").style.display = $("base_url").style.display = needsUrl ? "" : "none";
+  $("api_key").placeholder = needsUrl ? "optional for self-hosted" : "required";
+  $("model").placeholder = p === "gemini" ? "imagen-4.0-fast-generate-001" : "server default";
+}
+$("provider").addEventListener("change", syncFields);
+
+async function boot(update) {
+  if (!settingsOpen) showBoot();
+  try {
+    serverPort = await invoke("start_server", { update: !!update });
+    $("app").src = "http://127.0.0.1:" + serverPort + "/";
+    if (settingsOpen) $("status").textContent = "set up your provider";
+    else showApp();
+  } catch (e) {
+    $("status").textContent = "error";
+    showSettings(false);
+    $("err").textContent = String(e);
+  }
+}
+
+$("btn-models").onclick = async () => {
+  $("err").textContent = "";
+  const btn = $("btn-models");
+  if (!serverPort) { $("err").textContent = "Still starting up — try again in a moment."; return; }
+  btn.disabled = true; btn.textContent = "Fetching…";
+  try {
+    const body = { provider: $("provider").value };
+    if ($("base_url").value.trim()) body.base_url = $("base_url").value.trim();
+    if ($("api_key").value.trim()) body.api_key = $("api_key").value.trim();
+    const res = await fetch("http://127.0.0.1:" + serverPort + "/api/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.statusText);
+    $("model-list").innerHTML = "";
+    for (const name of data.models) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      $("model-list").appendChild(opt);
+    }
+    if (!data.models.length) $("err").textContent = "The provider reported no models.";
+    else if (!$("model").value) $("model").value = data.models[0];
+    $("model").focus();
+  } catch (e) {
+    $("err").textContent = "Could not list models: " + (e.message || e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Fetch models";
+  }
+};
+
+$("btn-save").onclick = async () => {
+  $("err").textContent = "";
+  try {
+    await invoke("save_settings", { settings: {
+      provider: $("provider").value,
+      base_url: $("base_url").value.trim(),
+      api_key: $("api_key").value.trim(),
+      model: $("model").value.trim(),
+    }});
+    settingsOpen = false;
+    showBoot("Restarting Limn…");
+    serverPort = await invoke("restart_server");
+    $("app").src = "http://127.0.0.1:" + serverPort + "/";
+    showApp();
+  } catch (e) {
+    $("err").textContent = String(e);
+  }
+};
+
+$("btn-cancel").onclick = () => { settingsOpen = false; if (serverPort) showApp(); };
+$("btn-settings").onclick = async () => { await loadSettingsForm(); showSettings(!!serverPort); };
+
+(async function init() {
+  const s = await loadSettingsForm();
+  if (!s.provider) {
+    // First run: show provider setup while the runtime/server boots in the
+    // background, so "Fetch models" works right away.
+    $("status").textContent = "set up your provider";
+    showSettings(false);
+  }
+  await boot(false);
+})();
+</script>
+</body>
+</html>

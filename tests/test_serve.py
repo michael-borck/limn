@@ -19,6 +19,9 @@ class FakeProvider(ImageProvider):
             for _ in range(request.count)
         ]
 
+    def list_models(self, request):
+        return [f"model-from-{request.base_url or 'default'}"]
+
 
 class ExplodingProvider(ImageProvider):
     name = "boom"
@@ -67,6 +70,16 @@ def test_generate_view_delete_lifecycle(client):
     assert client.delete(f"/api/images/{created[0]['id']}").status_code == 200
     assert client.get(f"/api/images/{created[0]['id']}").status_code == 404
     assert len(client.get("/api/images").json()["images"]) == 1
+
+
+def test_models_endpoint(client):
+    data = client.post("/api/models", json={}).json()
+    assert data == {"models": ["model-from-default"], "provider": "swarmui"}
+    # Overrides pass through outside demo mode.
+    data = client.post(
+        "/api/models", json={"base_url": "https://sw.example.org"}
+    ).json()
+    assert data["models"] == ["model-from-https://sw.example.org"]
 
 
 def test_generate_validates_input(client):

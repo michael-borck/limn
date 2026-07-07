@@ -52,6 +52,13 @@ class ImageProvider(ABC):
         """Generate ``request.count`` images. Raises ProviderError on failure."""
         raise NotImplementedError
 
+    def list_models(self, request: GenerateRequest) -> list[str]:
+        """Model names this backend offers (prompt in ``request`` is unused).
+
+        Raises ProviderError on failure or when the backend can't enumerate.
+        """
+        raise ProviderError(f"Provider '{self.name}' cannot list models.")
+
     def warn_unsupported(self, request: GenerateRequest) -> None:
         """Tell the user (stderr) about request fields this backend ignores."""
         for label, value in self.unsupported(request):

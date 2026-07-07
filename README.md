@@ -68,6 +68,10 @@ limn "watercolour fox" --provider swarmui --size 1024x1024 --count 4 --seed 42
 | `-o, --out` | Output file; default is a slug of the prompt, never overwritten |
 | `-c, --config` | Explicit config file |
 
+`limn models` asks your provider which models it offers (SwarmUI requires
+picking one — e.g. `limn "a fox" -m juggernautXL_v9`). The web UI and desktop
+Settings have a matching "fetch models" button.
+
 ## Config
 
 Layered, later wins: built-in defaults → `~/.limn.yaml` (your provider + keys,
@@ -111,10 +115,20 @@ disabled (visitors download instead), gallery entries expire after 15 min,
 and the page shows an "install locally" banner. See
 [docs/demo-deploy.md](docs/demo-deploy.md).
 
+## Desktop app
+
+A native app (Tauri) for people who don't live in a terminal: install, pick
+your provider in Settings (server URL / API key — bring your own), type,
+generate. First launch bootstraps a private Python runtime via `uv` (~a
+minute, no system Python needed); images save to `Pictures/Limn`. Installers
+for macOS / Windows / Linux are built by CI from [`desktop/`](desktop/) —
+grab them from the GitHub releases page. Builds are unsigned for now: on
+macOS right-click → Open the first time; on Windows "More info → Run anyway".
+
 ## Roadmap
 
-A **CLI**, a local **web UI**, and a hostable **demo mode** (this release),
-then a **Tauri desktop app** with bring-your-own-provider.
+**CLI**, **web UI** (`limn serve`), hostable **demo mode**, and the
+**desktop app** — all four SPEC surfaces are in.
 
 📄 See **[SPEC.md](SPEC.md)** for the full specification.
 

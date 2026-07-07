@@ -45,16 +45,24 @@ def build_request(prompt: str, settings: dict[str, Any]) -> GenerateRequest:
     )
 
 
-def generate(prompt: str, settings: dict[str, Any]) -> list[GeneratedImage]:
-    """Generate images for a prompt using the provider named in settings."""
+def _provider_for(settings: dict[str, Any]):
     provider_name = settings.get("provider")
     if not provider_name:
         raise ValueError(
             "No provider configured. Set 'provider:' in ~/.limn.yaml "
             "(run 'limn --init-config' for a template) or pass --provider."
         )
-    provider = get_provider(str(provider_name))
-    return provider.generate(build_request(prompt, settings))
+    return get_provider(str(provider_name))
+
+
+def generate(prompt: str, settings: dict[str, Any]) -> list[GeneratedImage]:
+    """Generate images for a prompt using the provider named in settings."""
+    return _provider_for(settings).generate(build_request(prompt, settings))
+
+
+def list_models(settings: dict[str, Any]) -> list[str]:
+    """Model names offered by the provider named in settings."""
+    return _provider_for(settings).list_models(build_request("", settings))
 
 
 def image_extension(data: bytes) -> str:

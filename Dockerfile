@@ -14,7 +14,7 @@
 # or pass your own:  docker run ... limn --token <token>
 FROM python:3.12-slim
 
-ARG LIMN_VERSION=0.3.0
+ARG LIMN_VERSION=0.4.0
 RUN pip install --no-cache-dir "limn[serve]==${LIMN_VERSION}"
 
 RUN useradd --create-home limn
