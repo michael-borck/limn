@@ -167,7 +167,7 @@ def serve(
         "127.0.0.1", "--host", help="Address to bind (127.0.0.1 = local only)."
     ),
     port: int = typer.Option(5466, "--port", help="Port to listen on."),
-    token: str = typer.Option(
+    token: str | None = typer.Option(
         None,
         "--token",
         help="Access token; generated automatically when binding non-locally.",
@@ -183,8 +183,15 @@ def serve(
     no_browser: bool = typer.Option(
         False, "--no-browser", help="Don't auto-open the browser."
     ),
+    demo: bool = typer.Option(
+        False,
+        "--demo",
+        help="Demo mode (or LIMN_DEMO=1): no token, rate-limited, "
+        "Save disabled — nothing stored server-side.",
+    ),
 ) -> None:
     r"""Run the local web UI (needs: pip install 'limn\[serve]')."""
+    import os
     import secrets
     import threading
     import webbrowser
@@ -206,13 +213,20 @@ def serve(
         err_console.print(str(e))
         raise typer.Exit(code=1) from None
 
+    demo = demo or os.getenv("LIMN_DEMO", "").lower() in ("1", "true", "yes")
     local = host in ("127.0.0.1", "localhost", "::1")
-    if token is None and not local:
+    if demo:
+        # Friction-free by design: bounded by rate limits, not a token.
+        token = None
+        console.print(
+            "[bold]Demo mode[/bold]: no token, rate-limited, nothing stored."
+        )
+    elif token is None and not local:
         # Never expose an unauthenticated instance beyond localhost.
         token = secrets.token_urlsafe(16)
         console.print(f"Generated access token: [bold]{token}[/bold]")
 
-    application = create_app(cfg, token=token, out_dir=Path(out_dir))
+    application = create_app(cfg, token=token, out_dir=Path(out_dir), demo=demo)
 
     url = f"http://{host}:{port}/" + (f"?token={token}" if token else "")
     console.print(f"Limn web UI: [bold green]{url}[/bold green]  (Ctrl+C to stop)")

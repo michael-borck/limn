@@ -79,6 +79,17 @@
   .card .row button { font-size: .78rem; padding: .3rem .6rem; border-radius: 6px; flex: 1; }
   .card .saved { color: var(--ok); font-size: .72rem; overflow-wrap: anywhere; }
   .empty { color: var(--muted); margin-top: 2.5rem; text-align: center; }
+  #demo-banner {
+    display: none; margin-bottom: 1rem; padding: .55rem .9rem;
+    border-radius: 8px; font-size: .88rem;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  #demo-banner a { color: var(--accent); }
+  #demo-banner code {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    padding: .05rem .35rem; border-radius: 4px;
+  }
   @keyframes pulse { 50% { opacity: .45; } }
   .card.pending .ph {
     aspect-ratio: 1; background: var(--line); animation: pulse 1.2s ease-in-out infinite;
@@ -91,6 +102,14 @@
     <h1>🖼️ Limn</h1>
     <small>type a description, get an image — yours, locally</small>
   </header>
+
+  <div id="demo-banner">
+    <strong>Shared demo</strong> — a few images per hour, nothing is stored
+    and images vanish after a while. For unlimited, fully private use, run
+    Limn yourself: <code>pip install limn</code>
+    (<a href="https://pypi.org/project/limn/" target="_blank" rel="noopener">PyPI</a> ·
+    <a href="https://github.com/michael-borck/limn" target="_blank" rel="noopener">GitHub</a>)
+  </div>
 
   <div class="prompt-box">
     <textarea id="prompt" placeholder="a red bicycle against a brick wall, watercolour…" autofocus></textarea>
@@ -119,6 +138,7 @@
 "use strict";
 const $ = id => document.getElementById(id);
 const gallery = $("gallery"), errBox = $("error");
+let DEMO = false;
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -163,7 +183,10 @@ function addCard(item) {
   card.querySelector(".p").textContent = item.prompt;
   card.querySelector(".p").title = item.prompt;
 
-  card.querySelector(".save").onclick = async (e) => {
+  const saveBtn = card.querySelector(".save");
+  if (DEMO) saveBtn.textContent = "Download";
+  saveBtn.onclick = async (e) => {
+    if (DEMO) { window.location.href = url + "?download=1"; return; }
     try {
       const { path } = await api(url + "/save", { method: "POST",
         headers: { "Content-Type": "application/json" }, body: "{}" });
@@ -227,6 +250,13 @@ $("prompt").addEventListener("keydown", (e) => {
 (async function init() {
   try {
     const cfg = await api("/api/config");
+    DEMO = !!cfg.demo;
+    if (DEMO) {
+      $("demo-banner").style.display = "block";
+      // Provider, model and count are locked server-side in demo mode.
+      $("provider").closest("label").style.display = "none";
+      $("count").closest("label").style.display = "none";
+    }
     for (const name of cfg.providers) {
       const opt = document.createElement("option");
       opt.value = name;

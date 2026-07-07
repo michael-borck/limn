@@ -13,6 +13,14 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**M3 (demo mode) done: shipped in 0.3.0.** `limn serve --demo` (or
+LIMN_DEMO=1): tokenless but bounded — 10 images/hour/IP (X-Forwarded-For
+aware), provider+model locked to server config (visitors can't route spend),
+count=1, size clamped ≤1024px, Save returns 403 (UI swaps to Download with
+Content-Disposition), gallery entries expire after 15 min (lazy eviction),
+banner with pip-install nudge. Deploy notes in docs/demo-deploy.md. The
+actual hosting (app.limn.<domain>, reverse proxy) is infra the user does.
+
 **M2 (web UI) done: `limn serve` shipped in 0.2.0.** `src/limn/serve.py` is a
 FastAPI app factory (`create_app(config, token, out_dir)`) + a self-contained
 `serve_page.html` (package data, no CDNs). Session gallery is in-memory only

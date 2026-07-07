@@ -101,10 +101,19 @@ Binds `127.0.0.1` by default. Binding any other host requires a token
 (`--token`, or one is generated and printed); useful flags: `--port`,
 `--out-dir`, `--no-browser`.
 
+### Hosting a shared demo
+
+`limn serve --demo` (or `LIMN_DEMO=1`) runs a friction-free public instance
+with guardrails instead of a token: 10 images/hour per IP, provider/model
+locked to the server config, one ≤1024px image per request, server-side Save
+disabled (visitors download instead), gallery entries expire after 15 min,
+and the page shows an "install locally" banner. See
+[docs/demo-deploy.md](docs/demo-deploy.md).
+
 ## Roadmap
 
-A **CLI** and a local **web UI** (this release), then a **Tauri desktop app**
-with bring-your-own-provider, plus a rate-limited, non-storing **demo**.
+A **CLI**, a local **web UI**, and a hostable **demo mode** (this release),
+then a **Tauri desktop app** with bring-your-own-provider.
 
 📄 See **[SPEC.md](SPEC.md)** for the full specification.
 

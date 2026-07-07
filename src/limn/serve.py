@@ -46,6 +46,12 @@ MEDIA_TYPES = {
 # eating RAM while staying comfortably above what one sitting produces.
 MAX_SESSION_IMAGES = 100
 
+# Demo-mode guardrails (SPEC §3): friction-free (no token) but bounded, and
+# truly non-storing — Save is disabled and images evaporate after a while.
+DEMO_IMAGES_PER_HOUR = 10  # per client IP
+DEMO_MAX_DIMENSION = 1024
+DEMO_TTL_SECONDS = 15 * 60
+
 
 @dataclass
 class SessionImage:
@@ -87,16 +93,56 @@ def create_app(
     config: dict[str, Any],
     token: str | None = None,
     out_dir: Path | None = None,
+    demo: bool = False,
+    demo_images_per_hour: int = DEMO_IMAGES_PER_HOUR,
+    demo_ttl_seconds: float = DEMO_TTL_SECONDS,
 ) -> FastAPI:
-    """Build the Limn web app around a loaded config."""
-    auth_token = token or ""
+    """Build the Limn web app around a loaded config.
+
+    Demo mode is friction-free (no token) but bounded: provider/model locked
+    to the server's config, one image per request capped at 1024px, a per-IP
+    hourly budget, Save disabled, and gallery entries expire.
+    """
+    auth_token = "" if demo else (token or "")
     save_dir = (out_dir or Path.cwd()).resolve()
     index_html = (
         resources.files("limn").joinpath("serve_page.html").read_text("utf-8")
     )
 
     store: dict[str, SessionImage] = {}
+    generation_log: dict[str, list[float]] = {}  # demo: client ip -> times
     lock = threading.Lock()
+
+    def client_ip(request: Request) -> str:
+        # Behind a reverse proxy the real IP is in X-Forwarded-For.
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    def check_demo_budget(request: Request) -> None:
+        ip = client_ip(request)
+        now = time.time()
+        with lock:
+            recent = [t for t in generation_log.get(ip, []) if now - t < 3600]
+            if len(recent) >= demo_images_per_hour:
+                minutes = int((3600 - (now - recent[0])) // 60) + 1
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Demo limit reached ({demo_images_per_hour} "
+                    f"images/hour). Try again in ~{minutes} min — or run "
+                    "Limn yourself, free and private: pip install limn",
+                )
+            recent.append(now)
+            generation_log[ip] = recent
+
+    def evict_expired() -> None:
+        if not demo:
+            return
+        cutoff = time.time() - demo_ttl_seconds
+        with lock:
+            for key in [k for k, v in store.items() if v.created < cutoff]:
+                del store[key]
 
     # No docs/openapi endpoints: this is an app page, not a public API.
     app = FastAPI(title="Limn", docs_url=None, redoc_url=None, openapi_url=None)
@@ -131,21 +177,36 @@ def create_app(
 
     @app.get("/api/config", dependencies=[Depends(require_token)])
     def api_config() -> dict[str, Any]:
-        return {
+        info: dict[str, Any] = {
             "version": __version__,
             "provider": config.get("provider"),
             "providers": sorted(set(PROVIDERS)),
             "size": config.get("size") or [1024, 1024],
+            "demo": demo,
         }
+        if demo:
+            info["limits"] = {
+                "images_per_hour": demo_images_per_hour,
+                "ttl_minutes": int(demo_ttl_seconds // 60),
+            }
+        return info
 
     @app.get("/api/images", dependencies=[Depends(require_token)])
     def api_list() -> dict[str, Any]:
+        evict_expired()
         with lock:
             return {"images": [_meta(item) for item in store.values()]}
 
     @app.post("/api/generate", dependencies=[Depends(require_token)])
-    def api_generate(payload: GeneratePayload) -> dict[str, Any]:
-        provider_name = payload.provider or config.get("provider")
+    def api_generate(payload: GeneratePayload, request: Request) -> dict[str, Any]:
+        evict_expired()
+        # Demo locks provider and model to the server's config so visitors
+        # can't route spend to other backends the host has keys for.
+        provider_name = (
+            config.get("provider")
+            if demo
+            else payload.provider or config.get("provider")
+        )
         if not provider_name:
             raise HTTPException(
                 status_code=400,
@@ -154,7 +215,7 @@ def create_app(
             )
 
         settings = resolve_settings(config, str(provider_name))
-        if payload.model:
+        if payload.model and not demo:
             settings["model"] = payload.model
         if payload.size:
             try:
@@ -166,6 +227,15 @@ def create_app(
             settings["seed"] = payload.seed
         if payload.negative:
             settings["negative"] = payload.negative
+
+        if demo:
+            settings["count"] = 1
+            width, height = settings.get("size") or [1024, 1024]
+            settings["size"] = [
+                min(int(width), DEMO_MAX_DIMENSION),
+                min(int(height), DEMO_MAX_DIMENSION),
+            ]
+            check_demo_budget(request)
 
         try:
             images = generate(payload.prompt, settings)
@@ -190,14 +260,22 @@ def create_app(
         return {"images": items}
 
     @app.get("/api/images/{image_id}", dependencies=[Depends(require_token)])
-    def api_image(image_id: str) -> Response:
+    def api_image(image_id: str, download: bool = False) -> Response:
+        evict_expired()
         with lock:
             item = store.get(image_id)
         if item is None:
             raise HTTPException(status_code=404, detail="No such image")
         ext = image_extension(item.data)
+        headers = {}
+        if download:
+            headers["Content-Disposition"] = (
+                f'attachment; filename="{slugify(item.prompt)}{ext}"'
+            )
         return Response(
-            content=item.data, media_type=MEDIA_TYPES.get(ext, "image/png")
+            content=item.data,
+            media_type=MEDIA_TYPES.get(ext, "image/png"),
+            headers=headers,
         )
 
     @app.delete("/api/images/{image_id}", dependencies=[Depends(require_token)])
@@ -212,6 +290,12 @@ def create_app(
         "/api/images/{image_id}/save", dependencies=[Depends(require_token)]
     )
     def api_save(image_id: str, payload: SavePayload | None = None) -> dict[str, Any]:
+        if demo:
+            raise HTTPException(
+                status_code=403,
+                detail="The demo stores nothing server-side — use Download, "
+                "or run Limn locally: pip install limn",
+            )
         with lock:
             item = store.get(image_id)
         if item is None:
