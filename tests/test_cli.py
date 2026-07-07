@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from limn import __version__
-from limn.cli import app, parse_size
+from limn.cli import app
 from limn.providers import GeneratedImage, ImageProvider
 from tests.conftest import PNG_BYTES
 
@@ -39,28 +39,28 @@ def fake_provider(monkeypatch):
     return provider
 
 
-def test_parse_size():
-    assert parse_size("1024x1024") == (1024, 1024)
-    assert parse_size("1920X1080") == (1920, 1080)
-    assert parse_size("512") == (512, 512)
-
-
-def test_parse_size_rejects_garbage():
-    import typer
-
-    with pytest.raises(typer.BadParameter):
-        parse_size("huge")
-
-
 def test_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert __version__ in result.output
 
 
-def test_no_prompt_is_an_error(isolated_config):
+def test_no_args_shows_help(isolated_config):
     result = runner.invoke(app, [])
+    assert "generate" in all_output(result)
+    assert "serve" in all_output(result)
+
+
+def test_generate_subcommand_without_prompt_errors(isolated_config):
+    result = runner.invoke(app, ["generate"])
     assert result.exit_code == 2
+
+
+def test_explicit_generate_subcommand(isolated_config, fake_provider):
+    _, cwd = isolated_config
+    result = runner.invoke(app, ["generate", "a fox", "--provider", "fake"])
+    assert result.exit_code == 0, result.output
+    assert (cwd / "a-fox.png").exists()
 
 
 def test_no_provider_is_a_helpful_error(isolated_config, fake_provider):

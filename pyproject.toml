@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "limn"
-version = "0.1.0"
+version = "0.2.0"
 description = "A small, privacy-first text-to-image tool: type a prompt, get an image. Bring your own provider."
 readme = "README.md"
 license = { text = "MIT" }
@@ -111,9 +111,12 @@ branch = true
 dev = [
     "basedpyright>=1.29.4",
     "build>=1.2.2",
+    "fastapi>=0.110.0",
+    "httpx>=0.27.0",
     "pytest>=8.4.0",
     "pytest-cov>=6.0.0",
     "pytest-mock>=3.14.0",
     "ruff>=0.12.0",
     "twine>=6.1.0",
+    "uvicorn>=0.29.0",
 ]

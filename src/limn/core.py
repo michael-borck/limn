@@ -8,6 +8,20 @@ from typing import Any
 
 from limn.providers import GeneratedImage, GenerateRequest, get_provider
 
+_SIZE_RE = re.compile(r"^(\d+)\s*[xX]\s*(\d+)$")
+
+
+def parse_size(value: str) -> tuple[int, int]:
+    """Parse '1024x1024' (or a bare '1024' meaning square) into (w, h)."""
+    value = value.strip()
+    if value.isdigit():
+        side = int(value)
+        return side, side
+    match = _SIZE_RE.match(value)
+    if not match:
+        raise ValueError(f"Size must look like 1024x1024 (got {value!r})")
+    return int(match.group(1)), int(match.group(2))
+
 
 def build_request(prompt: str, settings: dict[str, Any]) -> GenerateRequest:
     """Build a provider request from resolved settings."""
@@ -63,7 +77,7 @@ def slugify(text: str, max_length: int = 40) -> str:
     return slug or "image"
 
 
-def _unique(path: Path) -> Path:
+def unique_path(path: Path) -> Path:
     """Avoid clobbering existing files by appending -2, -3, ..."""
     if not path.exists():
         return path
@@ -87,7 +101,7 @@ def save_images(
     if out is None:
         base = Path(slugify(prompt))
         for image in images:
-            target = _unique(base.with_suffix(image_extension(image.data)))
+            target = unique_path(base.with_suffix(image_extension(image.data)))
             target.write_bytes(image.data)
             paths.append(target)
         return paths

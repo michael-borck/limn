@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limn</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1f24; --muted: #6b7280;
+    --line: #e3e1dc; --accent: #7c5cff; --accent-ink: #ffffff;
+    --danger: #c2452d; --ok: #2c7a4b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --panel: #181b21; --ink: #e8e6e1; --muted: #8b93a1;
+      --line: #262a32; --accent: #9d85ff; --accent-ink: #14121f;
+      --danger: #e06c50; --ok: #5fbf85;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  header { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.5rem; margin: 0; letter-spacing: .01em; }
+  header small { color: var(--muted); }
+  .prompt-box {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1rem;
+  }
+  textarea {
+    width: 100%; min-height: 4.5rem; resize: vertical; border: none;
+    background: transparent; color: var(--ink); font: inherit; outline: none;
+  }
+  .bar { display: flex; align-items: center; gap: .75rem; margin-top: .5rem; flex-wrap: wrap; }
+  button {
+    font: inherit; border: 1px solid var(--line); border-radius: 8px;
+    padding: .45rem .9rem; background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button:disabled { opacity: .55; cursor: wait; }
+  .primary {
+    background: var(--accent); color: var(--accent-ink);
+    border-color: transparent; font-weight: 600; padding: .45rem 1.4rem;
+  }
+  .hint { color: var(--muted); font-size: .85rem; margin-left: auto; }
+  details { margin-top: .25rem; }
+  summary { cursor: pointer; color: var(--muted); font-size: .9rem; user-select: none; }
+  .opts { display: flex; gap: .75rem; flex-wrap: wrap; padding: .75rem 0 .25rem; }
+  .opts label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; color: var(--muted); }
+  .opts input, .opts select {
+    font: inherit; font-size: .9rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: .3rem .5rem; width: 9.5rem;
+  }
+  .opts input[type=number] { width: 5.5rem; }
+  #error {
+    display: none; margin: 1rem 0 0; padding: .6rem .9rem; border-radius: 8px;
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border: 1px solid var(--danger); color: var(--danger); font-size: .9rem;
+    white-space: pre-wrap;
+  }
+  #gallery {
+    margin-top: 2rem; display: grid; gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card a.img { display: block; background: var(--bg); }
+  .card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+  .card .body { padding: .6rem .75rem .7rem; display: flex; flex-direction: column; gap: .45rem; }
+  .card .p { font-size: .82rem; line-height: 1.35; max-height: 3.6em; overflow: hidden; }
+  .card .meta { font-size: .72rem; color: var(--muted); }
+  .card .row { display: flex; gap: .4rem; }
+  .card .row button { font-size: .78rem; padding: .3rem .6rem; border-radius: 6px; flex: 1; }
+  .card .saved { color: var(--ok); font-size: .72rem; overflow-wrap: anywhere; }
+  .empty { color: var(--muted); margin-top: 2.5rem; text-align: center; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .card.pending .ph {
+    aspect-ratio: 1; background: var(--line); animation: pulse 1.2s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🖼️ Limn</h1>
+    <small>type a description, get an image — yours, locally</small>
+  </header>
+
+  <div class="prompt-box">
+    <textarea id="prompt" placeholder="a red bicycle against a brick wall, watercolour…" autofocus></textarea>
+    <div class="bar">
+      <button class="primary" id="go">Generate</button>
+      <details>
+        <summary>Options</summary>
+        <div class="opts">
+          <label>provider <select id="provider"><option value="">(default)</option></select></label>
+          <label>size <input id="size" placeholder="1024x1024"></label>
+          <label>count <input id="count" type="number" min="1" max="10" value="1"></label>
+          <label>seed <input id="seed" type="number" placeholder="random"></label>
+          <label>negative <input id="negative" placeholder="text, watermark"></label>
+        </div>
+      </details>
+      <span class="hint">⌘⏎ / Ctrl⏎ to generate</span>
+    </div>
+  </div>
+  <div id="error"></div>
+
+  <div id="gallery"></div>
+  <p class="empty" id="empty">Nothing yet. Images appear here — kept in memory only until you save them.</p>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const gallery = $("gallery"), errBox = $("error");
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function showError(message) {
+  errBox.textContent = message;
+  errBox.style.display = "block";
+}
+function clearError() { errBox.style.display = "none"; }
+
+function metaLine(item) {
+  const bits = [item.provider];
+  if (item.seed !== null && item.seed !== undefined) bits.push("seed " + item.seed);
+  return bits.join(" · ");
+}
+
+function addCard(item) {
+  $("empty").style.display = "none";
+  const card = document.createElement("div");
+  card.className = "card";
+  card.dataset.id = item.id;
+  const url = "/api/images/" + item.id;
+  card.innerHTML = `
+    <a class="img" href="${url}" target="_blank"><img src="${url}" alt=""></a>
+    <div class="body">
+      <div class="p"></div>
+      <div class="meta">${metaLine(item)}</div>
+      <div class="row">
+        <button class="save">Save</button>
+        <button class="again">Again</button>
+        <button class="del">Delete</button>
+      </div>
+      <div class="saved" style="display:none"></div>
+    </div>`;
+  card.querySelector(".p").textContent = item.prompt;
+  card.querySelector(".p").title = item.prompt;
+
+  card.querySelector(".save").onclick = async (e) => {
+    try {
+      const { path } = await api(url + "/save", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: "{}" });
+      const saved = card.querySelector(".saved");
+      saved.textContent = "saved → " + path;
+      saved.style.display = "block";
+      e.target.textContent = "Saved";
+    } catch (err) { showError("Save failed: " + err.message); }
+  };
+  card.querySelector(".del").onclick = async () => {
+    try { await api(url, { method: "DELETE" }); } catch {}
+    card.remove();
+    if (!gallery.children.length) $("empty").style.display = "";
+  };
+  card.querySelector(".again").onclick = () => generate(item.prompt, true);
+
+  gallery.prepend(card);
+}
+
+async function generate(promptOverride, dropSeed) {
+  clearError();
+  const prompt = (promptOverride ?? $("prompt").value).trim();
+  if (!prompt) { $("prompt").focus(); return; }
+
+  const payload = { prompt, count: parseInt($("count").value || "1", 10) };
+  if ($("provider").value) payload.provider = $("provider").value;
+  if ($("size").value.trim()) payload.size = $("size").value.trim();
+  if (!dropSeed && $("seed").value !== "") payload.seed = parseInt($("seed").value, 10);
+  if ($("negative").value.trim()) payload.negative = $("negative").value.trim();
+
+  const go = $("go");
+  go.disabled = true; go.textContent = "Limning…";
+  const pending = document.createElement("div");
+  pending.className = "card pending";
+  pending.innerHTML = '<div class="ph"></div>';
+  gallery.prepend(pending);
+  $("empty").style.display = "none";
+
+  try {
+    const { images } = await api("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    pending.remove();
+    images.forEach(addCard);
+  } catch (err) {
+    pending.remove();
+    if (!gallery.children.length) $("empty").style.display = "";
+    showError(err.message);
+  } finally {
+    go.disabled = false; go.textContent = "Generate";
+  }
+}
+
+$("go").onclick = () => generate();
+$("prompt").addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
+});
+
+(async function init() {
+  try {
+    const cfg = await api("/api/config");
+    for (const name of cfg.providers) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name + (name === cfg.provider ? " (default)" : "");
+      $("provider").appendChild(opt);
+    }
+    if (Array.isArray(cfg.size)) $("size").placeholder = cfg.size.join("x");
+    const { images } = await api("/api/images");
+    images.forEach(addCard);
+  } catch (err) { showError(err.message); }
+})();
+</script>
+</body>
+</html>

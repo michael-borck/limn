@@ -1,41 +1,47 @@
-"""Limn CLI: `limn "a red bicycle" -o bike.png`."""
+"""Limn CLI: `limn "a red bicycle" -o bike.png`, plus `limn serve`."""
 
 from __future__ import annotations
 
-import re
+from typing import Any
 
 import typer
 from rich.console import Console
+from typer.core import TyperGroup
 
 from limn import __version__
 from limn.config import ConfigurationError, load_config, resolve_settings
 from limn.config import save_example_config as _save_example_config
-from limn.core import generate, save_images
+from limn.core import generate as _generate
+from limn.core import parse_size, save_images
 from limn.providers import ProviderError
 
 console = Console()
 err_console = Console(stderr=True, style="bold red")
 
+
+class DefaultCommandGroup(TyperGroup):
+    """Route bare invocations to `generate` so `limn "a prompt"` just works.
+
+    `limn serve ...` and `limn generate ...` hit their commands normally;
+    anything else (a prompt, or generate's options like --init-config) is
+    prefixed with `generate`.
+    """
+
+    default_command = "generate"
+    _root_tokens = {"-h", "--help", "-V", "--version"}
+
+    def parse_args(self, ctx: Any, args: list[str]) -> list[str]:
+        if args and args[0] not in self.commands and args[0] not in self._root_tokens:
+            args = [self.default_command, *args]
+        return super().parse_args(ctx, args)
+
+
 app = typer.Typer(
+    cls=DefaultCommandGroup,
     add_completion=False,
+    no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-
-_SIZE_RE = re.compile(r"^(\d+)\s*[xX]\s*(\d+)$")
-
-
-def parse_size(value: str) -> tuple[int, int]:
-    """Parse '1024x1024' (or a bare '1024' meaning square) into (w, h)."""
-    value = value.strip()
-    if value.isdigit():
-        side = int(value)
-        return side, side
-    match = _SIZE_RE.match(value)
-    if not match:
-        raise typer.BadParameter(
-            f"Size must look like 1024x1024 (got {value!r})"
-        )
-    return int(match.group(1)), int(match.group(2))
 
 
 def _version_callback(value: bool) -> None:
@@ -44,8 +50,23 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+@app.callback()
+def root(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Print version and exit.",
+    ),
+) -> None:
+    """Limn — type a description, get an image. Bring your own provider."""
+    del version  # handled by the eager callback
+
+
 @app.command()
-def main(
+def generate(
     prompt: str = typer.Argument(
         None,
         help="Text description of the image to generate.",
@@ -89,23 +110,13 @@ def main(
     init_config: bool = typer.Option(
         False, "--init-config", help="Write an example ./limn.yaml and exit."
     ),
-    version: bool = typer.Option(
-        False,
-        "--version",
-        "-V",
-        callback=_version_callback,
-        is_eager=True,
-        help="Print version and exit.",
-    ),
 ) -> None:
-    """Turn a text description into an image, with the provider you chose.
+    """Turn a text description into an image (the default command).
 
     Configure once in ~/.limn.yaml (provider, server URL / API key), then:
 
         limn "a red bicycle against a brick wall" -o bike.png
     """
-    del version  # handled by the eager callback
-
     try:
         if init_config:
             path = _save_example_config()
@@ -140,7 +151,7 @@ def main(
         with console.status(
             f"Generating with {provider_name}...", spinner="dots"
         ):
-            images = generate(prompt, settings)
+            images = _generate(prompt, settings)
         paths = save_images(images, prompt, out)
         for path in paths:
             console.print(f"Saved: [bold green]{path}[/bold green]")
@@ -148,3 +159,64 @@ def main(
     except (ConfigurationError, ProviderError, ValueError) as e:
         err_console.print(str(e))
         raise typer.Exit(code=1) from None
+
+
+@app.command()
+def serve(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Address to bind (127.0.0.1 = local only)."
+    ),
+    port: int = typer.Option(5466, "--port", help="Port to listen on."),
+    token: str = typer.Option(
+        None,
+        "--token",
+        help="Access token; generated automatically when binding non-locally.",
+        show_default=False,
+    ),
+    out_dir: str = typer.Option(
+        ".", "--out-dir", help="Directory Save writes images into."
+    ),
+    config: str = typer.Option(
+        None, "--config", "-c", help="Config file (default: ./limn.yaml).",
+        show_default=False,
+    ),
+    no_browser: bool = typer.Option(
+        False, "--no-browser", help="Don't auto-open the browser."
+    ),
+) -> None:
+    r"""Run the local web UI (needs: pip install 'limn\[serve]')."""
+    import secrets
+    import threading
+    import webbrowser
+    from pathlib import Path
+
+    try:
+        import uvicorn
+
+        from limn.serve import create_app
+    except ImportError:
+        err_console.print(
+            "The web UI needs extra dependencies: pip install 'limn[serve]'"
+        )
+        raise typer.Exit(code=1) from None
+
+    try:
+        cfg = load_config(config)
+    except ConfigurationError as e:
+        err_console.print(str(e))
+        raise typer.Exit(code=1) from None
+
+    local = host in ("127.0.0.1", "localhost", "::1")
+    if token is None and not local:
+        # Never expose an unauthenticated instance beyond localhost.
+        token = secrets.token_urlsafe(16)
+        console.print(f"Generated access token: [bold]{token}[/bold]")
+
+    application = create_app(cfg, token=token, out_dir=Path(out_dir))
+
+    url = f"http://{host}:{port}/" + (f"?token={token}" if token else "")
+    console.print(f"Limn web UI: [bold green]{url}[/bold green]  (Ctrl+C to stop)")
+    if not no_browser and local:
+        threading.Timer(0.8, webbrowser.open, args=[url]).start()
+
+    uvicorn.run(application, host=host, port=port, log_level="warning")

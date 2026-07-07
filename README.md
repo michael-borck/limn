@@ -86,10 +86,24 @@ providers:            # keep several configured; swap with `provider:`
     model: imagen-4.0-fast-generate-001
 ```
 
+## Web UI
+
+```bash
+pip install "limn[serve]"
+limn serve                # opens http://127.0.0.1:5466/ in your browser
+```
+
+One page: type a prompt → **Generate** → the image appears → **Save** (to
+disk), **Again** (regenerate), or **Delete**. The session gallery lives in the
+server process's memory only — nothing touches disk until you click Save.
+
+Binds `127.0.0.1` by default. Binding any other host requires a token
+(`--token`, or one is generated and printed); useful flags: `--port`,
+`--out-dir`, `--no-browser`.
+
 ## Roadmap
 
-A **CLI** (this release), then a simple **web UI** (`limn serve`: type →
-generate → view → save / delete / regenerate), then a **Tauri desktop app**
+A **CLI** and a local **web UI** (this release), then a **Tauri desktop app**
 with bring-your-own-provider, plus a rate-limited, non-storing **demo**.
 
 📄 See **[SPEC.md](SPEC.md)** for the full specification.

@@ -13,6 +13,17 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**M2 (web UI) done: `limn serve` shipped in 0.2.0.** `src/limn/serve.py` is a
+FastAPI app factory (`create_app(config, token, out_dir)`) + a self-contained
+`serve_page.html` (package data, no CDNs). Session gallery is in-memory only
+(dict capped at 100, privacy by design); endpoints: POST /api/generate,
+GET/DELETE /api/images/{id}, POST .../save (basename-sanitized, never
+overwrites), GET /api/config. Token auth (Bearer / ?token= / cookie) gates
+everything; `limn serve` auto-generates a token when binding non-locally.
+The CLI is now a `DefaultCommandGroup`: bare `limn "prompt"` routes to the
+`generate` command, `limn serve` is a real subcommand. Default port 5466
+("LIMN" on a phone keypad). Verified end-to-end against real Imagen.
+
 **M1 (CLI) built and published to PyPI as `limn` 0.1.0.** The package lives in
 `src/limn/`: `config.py` (layered ~/.limn.yaml < ./limn.yaml < flags, `${VAR}`
 expansion, per-provider `providers:` overlays), `providers/` (swarmui,

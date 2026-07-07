@@ -8,11 +8,24 @@ from limn.core import (
     build_request,
     generate,
     image_extension,
+    parse_size,
     save_images,
     slugify,
 )
 from limn.providers import GeneratedImage
 from tests.conftest import JPEG_BYTES, PNG_BYTES
+
+
+def test_parse_size():
+    assert parse_size("1024x1024") == (1024, 1024)
+    assert parse_size("1920X1080") == (1920, 1080)
+    assert parse_size("512") == (512, 512)
+    assert parse_size(" 640 x 480 ") == (640, 480)
+
+
+def test_parse_size_rejects_garbage():
+    with pytest.raises(ValueError):
+        parse_size("huge")
 
 
 def test_image_extension_sniffing():
