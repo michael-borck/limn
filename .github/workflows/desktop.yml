@@ -1,8 +1,9 @@
 # Build Limn desktop installers for macOS / Windows / Linux.
 #
-# Trigger: push a tag like desktop-v0.1.0 (creates a draft GitHub release
-# with the installers attached), or run manually from the Actions tab
-# (artifacts only, no release).
+# Trigger: push a tag like desktop-v0.1.0 (creates and PUBLISHES a GitHub
+# release with the installers attached — the landing page links to
+# /releases/latest, so releases go straight out), or run manually from the
+# Actions tab (artifacts only, no release).
 #
 # Builds are UNSIGNED — no signing certs are configured. macOS users must
 # right-click > Open (or `xattr -dr com.apple.quarantine /Applications/Limn.app`);
@@ -62,7 +63,7 @@ jobs:
           # runs these are empty and artifacts are uploaded instead.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && 'Limn Desktop __VERSION__' || '' }}
-          releaseDraft: true
+          releaseDraft: false
           releaseBody: |
             Limn desktop — privacy-first text-to-image, bring your own provider.
 

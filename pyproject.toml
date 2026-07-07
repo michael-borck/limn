@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "limn"
-version = "0.4.0"
+version = "0.4.1"
 description = "A small, privacy-first text-to-image tool: type a prompt, get an image. Bring your own provider."
 readme = "README.md"
 license = { text = "MIT" }

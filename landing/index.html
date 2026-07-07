@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limn — type a description, get an image. Privacy-first, bring your own provider.</title>
+<meta name="description" content="Limn is a small, privacy-first text-to-image tool. No account, no telemetry — your prompts go only to the image provider you choose. Desktop app, CLI, and web UI.">
+<meta property="og:title" content="Limn — type a description, get an image">
+<meta property="og:description" content="Privacy-first text-to-image. No account, no telemetry, bring your own provider.">
+<meta property="og:image" content="https://limn.eduserver.au/assets/shot-light.webp">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='6' y='6' width='88' height='88' rx='20' fill='%237c5cff'/><text x='50' y='72' font-size='62' font-family='Georgia,serif' font-weight='bold' fill='white' text-anchor='middle'>L</text></svg>">
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1f24; --muted: #6b7280;
+    --line: #e3e1dc; --accent: #7c5cff; --accent-soft: #7c5cff22;
+    --accent-ink: #ffffff; --term-bg: #14121f; --term-ink: #e8e6e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --panel: #181b21; --ink: #e8e6e1; --muted: #8b93a1;
+      --line: #262a32; --accent: #9d85ff; --accent-soft: #9d85ff22;
+      --accent-ink: #14121f; --term-bg: #0b0d11;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+
+  nav { display: flex; align-items: center; gap: 1.4rem; padding: 1.1rem 0; }
+  nav .brand { font-weight: 700; font-size: 1.15rem; color: var(--ink); }
+  nav .brand:hover { text-decoration: none; }
+  nav .links { margin-left: auto; display: flex; gap: 1.2rem; font-size: .92rem; }
+  nav .links a { color: var(--muted); }
+  nav .links a:hover { color: var(--ink); text-decoration: none; }
+
+  /* ---- hero ---- */
+  .hero { display: grid; grid-template-columns: minmax(0,5fr) minmax(0,6fr);
+          gap: 3rem; align-items: center; padding: 3.5rem 0 4.5rem; }
+  @media (max-width: 860px) { .hero { grid-template-columns: 1fr; padding-top: 1.5rem; } }
+  .eyebrow { color: var(--accent); font-weight: 600; font-size: .82rem;
+             letter-spacing: .08em; text-transform: uppercase; }
+  .hero h1 { font-size: clamp(2.1rem, 4.6vw, 3.2rem); line-height: 1.12;
+             letter-spacing: -.02em; margin: .6rem 0 1rem; }
+  .hero .sub { color: var(--muted); font-size: 1.08rem; max-width: 34rem; }
+  .cta-row { display: flex; gap: .8rem; flex-wrap: wrap; margin: 1.6rem 0 .8rem; }
+  .btn { display: inline-flex; align-items: center; gap: .5rem; font-weight: 600;
+         border-radius: 10px; padding: .7rem 1.35rem; font-size: 1rem;
+         border: 1px solid var(--line); color: var(--ink); }
+  .btn:hover { text-decoration: none; border-color: var(--muted); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.06); }
+  .fineprint { color: var(--muted); font-size: .82rem; }
+  .fineprint code { background: var(--accent-soft); padding: .05rem .35rem; border-radius: 4px; }
+
+  /* hero visual: framed screenshot + floating card */
+  .shots { position: relative; min-width: 0; }
+  .frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+           background: var(--panel); box-shadow: 0 24px 60px -28px rgba(0,0,0,.45);
+           animation: float 7s ease-in-out infinite; }
+  .frame .chrome { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .frame .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+  .frame img { width: 100%; height: auto; display: block; }
+  .float-card { position: absolute; left: -2.2rem; bottom: -2.4rem; width: 34%;
+                border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+                box-shadow: 0 18px 44px -20px rgba(0,0,0,.5); rotate: -4deg;
+                animation: float 7s ease-in-out infinite reverse; background: var(--panel); }
+  .float-card img { width: 100%; height: auto; display: block; }
+  .float-card .cap { font-size: .68rem; color: var(--muted); padding: .4rem .6rem; }
+  @keyframes float { 50% { transform: translateY(-9px); } }
+  @media (prefers-reduced-motion: reduce) { .frame, .float-card { animation: none; } }
+  @media (max-width: 860px) { .float-card { left: -0.5rem; } }
+
+  section { padding: 3.5rem 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.6rem; letter-spacing: -.01em; margin-bottom: .4rem; }
+  .lead { color: var(--muted); margin-bottom: 1.8rem; max-width: 40rem; }
+
+  /* ---- downloads ---- */
+  .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: .9rem; }
+  .dl { position: relative; display: flex; flex-direction: column; gap: .25rem;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+        padding: 1rem 1.1rem; }
+  .dl:hover { border-color: var(--accent); }
+  /* whole card clicks through to the main asset */
+  .dl a.main { color: var(--ink); display: flex; flex-direction: column; gap: .25rem; }
+  .dl a.main:hover { text-decoration: none; }
+  .dl a.main::after { content: ""; position: absolute; inset: 0; }
+  .dl .os { font-weight: 650; display: flex; align-items: center; gap: .5rem; }
+  .dl .kind { color: var(--muted); font-size: .85rem; }
+  .dl.detected { border-color: var(--accent); background: var(--accent-soft); }
+  .dl.detected::after { content: "your platform"; position: absolute; top: .7rem; right: .8rem;
+        font-size: .68rem; font-weight: 600; color: var(--accent);
+        border: 1px solid var(--accent); border-radius: 99px; padding: .1rem .5rem; }
+  .dl .alts { font-size: .8rem; color: var(--muted); margin-top: .25rem;
+        position: relative; z-index: 1; }
+  .dl-note { color: var(--muted); font-size: .82rem; margin-top: 1.1rem; max-width: 46rem; }
+
+  /* ---- pip callout ---- */
+  .pip { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr);
+         gap: 2.2rem; align-items: center; }
+  @media (max-width: 860px) { .pip { grid-template-columns: 1fr; } }
+  .term { background: var(--term-bg); color: var(--term-ink); border-radius: 12px;
+          border: 1px solid var(--line); font: .92rem/1.7 ui-monospace, SFMono-Regular,
+          Menlo, Consolas, monospace; padding: 1.1rem 1.2rem; overflow-x: auto; }
+  .term .lin { display: flex; align-items: center; gap: .6rem; white-space: nowrap; }
+  .term .p { color: #7fd4a2; user-select: none; }
+  .term .c { color: #8b93a1; }
+  .term button { margin-left: auto; background: transparent; border: 1px solid #3a3f4a;
+          color: #aab2bf; border-radius: 6px; font-size: .72rem; padding: .15rem .55rem;
+          cursor: pointer; }
+  .term button:hover { color: #fff; border-color: #aab2bf; }
+
+  /* ---- privacy trio ---- */
+  .trio { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: .9rem; }
+  .card { background: var(--panel); border: 1px solid var(--line);
+          border-radius: 12px; padding: 1.2rem 1.3rem; }
+  .card h3 { font-size: 1.02rem; margin-bottom: .35rem; }
+  .card p { color: var(--muted); font-size: .92rem; }
+  .card .glyph { font-size: 1.3rem; display: block; margin-bottom: .5rem; }
+
+  /* ---- demo strip ---- */
+  .demo-strip { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+        background: var(--accent-soft); border: 1px solid var(--accent);
+        border-radius: 14px; padding: 1.3rem 1.5rem; }
+  .demo-strip .txt { flex: 1; min-width: 240px; }
+  .demo-strip h3 { margin-bottom: .2rem; }
+  .demo-strip p { color: var(--muted); font-size: .92rem; }
+
+  footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem;
+           color: var(--muted); font-size: .88rem; }
+  footer .wrap { display: flex; gap: 1.4rem; flex-wrap: wrap; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav>
+    <a class="brand" href="/">🖼️ Limn</a>
+    <div class="links">
+      <a href="#download">Download</a>
+      <a href="#pip">pip install</a>
+      <a href="https://demo.limn.eduserver.au">Demo</a>
+      <a href="https://github.com/michael-borck/limn">GitHub</a>
+    </div>
+  </nav>
+
+  <div class="hero">
+    <div>
+      <span class="eyebrow">privacy-first · open source · bring your own provider</span>
+      <h1>Type a description.<br>Get an image.</h1>
+      <p class="sub">Limn is a small text-to-image tool that stays out of your way
+      and out of your data. No account, no telemetry, no cloud lock-in — prompts go
+      only to the image provider <em>you</em> choose, and every image lands on your
+      own machine.</p>
+      <div class="cta-row">
+        <a class="btn primary" id="hero-dl" href="#download">⬇ Download the app</a>
+        <a class="btn" href="https://demo.limn.eduserver.au">Try it in your browser →</a>
+      </div>
+      <p class="fineprint">Free &amp; open source (MIT) · ~2&nbsp;MB installer · or <code>pip install limn</code></p>
+    </div>
+    <div class="shots">
+      <div class="frame">
+        <div class="chrome"><i></i><i></i><i></i></div>
+        <picture>
+          <source srcset="assets/shot-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="assets/shot-light.webp" width="1180" height="800"
+               alt="The Limn app: a prompt box and a gallery of three generated images">
+        </picture>
+      </div>
+      <div class="float-card">
+        <img src="assets/fox.webp" width="640" height="640" alt="A generated watercolour fox">
+        <div class="cap">a watercolour fox curled up asleep · seed 11</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="download">
+  <div class="wrap">
+    <h2>Get the app</h2>
+    <p class="lead">A native desktop app for macOS, Windows and Linux. The installer is
+    a couple of megabytes; on first launch it sets up a private Python runtime and
+    you pick your image provider in Settings.</p>
+    <div class="dl-grid">
+      <div class="dl" data-os="mac">
+        <a class="main" id="dl-mac-arm" href="https://github.com/michael-borck/limn/releases/latest">
+          <span class="os">macOS</span><span class="kind">Apple Silicon · .dmg</span>
+        </a>
+      </div>
+      <div class="dl" data-os="mac">
+        <a class="main" id="dl-mac-intel" href="https://github.com/michael-borck/limn/releases/latest">
+          <span class="os">macOS</span><span class="kind">Intel · .dmg</span>
+        </a>
+      </div>
+      <div class="dl" data-os="win">
+        <a class="main" id="dl-win" href="https://github.com/michael-borck/limn/releases/latest">
+          <span class="os">⊞ Windows</span><span class="kind">Installer · .exe</span>
+        </a>
+        <span class="alts">also: <a id="dl-win-msi" href="https://github.com/michael-borck/limn/releases/latest">.msi</a></span>
+      </div>
+      <div class="dl" data-os="linux">
+        <a class="main" id="dl-linux" href="https://github.com/michael-borck/limn/releases/latest">
+          <span class="os">🐧 Linux</span><span class="kind">AppImage</span>
+        </a>
+        <span class="alts">also:
+          <a id="dl-linux-deb" href="https://github.com/michael-borck/limn/releases/latest">.deb</a> ·
+          <a id="dl-linux-rpm" href="https://github.com/michael-borck/limn/releases/latest">.rpm</a>
+        </span>
+      </div>
+    </div>
+    <p class="dl-note">Builds are unsigned for now: on macOS, right-click the app and
+    choose <strong>Open</strong> the first time; on Windows, pick
+    <strong>More info → Run anyway</strong>. All releases are on
+    <a href="https://github.com/michael-borck/limn/releases">GitHub</a>.</p>
+  </div>
+</section>
+
+<section id="pip">
+  <div class="wrap pip">
+    <div>
+      <h2>Prefer the terminal?</h2>
+      <p class="lead" style="margin-bottom:.6rem">The same engine is a Python package —
+      a one-line CLI, plus a local web UI with a session gallery.</p>
+      <p class="fineprint">On <a href="https://pypi.org/project/limn/">PyPI</a> ·
+      works with self-hosted SwarmUI, any OpenAI-compatible endpoint, OpenAI, or Google Imagen.</p>
+    </div>
+    <div class="term">
+      <div class="lin"><span class="p">$</span> pip install limn
+        <button data-copy="pip install limn">copy</button></div>
+      <div class="lin"><span class="p">$</span> limn "a red bicycle against a brick wall" -o bike.png</div>
+      <div class="lin"><span class="c"># or the local web UI:</span></div>
+      <div class="lin"><span class="p">$</span> pip install "limn[serve]" <span class="c">&amp;&amp;</span> limn serve</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Private by design</h2>
+    <p class="lead">Most image tools are someone else's app around someone else's
+    server. Limn is the simplest possible "text → image" surface that you own.</p>
+    <div class="trio">
+      <div class="card"><span class="glyph">🔒</span>
+        <h3>No account. No telemetry.</h3>
+        <p>Nothing to sign up for, nothing phones home. The only network traffic is
+        the generation request to the provider you configured.</p></div>
+      <div class="card"><span class="glyph">🔌</span>
+        <h3>Bring your own provider</h3>
+        <p>Point it at your self-hosted SwarmUI, any OpenAI-compatible endpoint, or a
+        cloud key (OpenAI, Google Imagen). Swap with one setting.</p></div>
+      <div class="card"><span class="glyph">💾</span>
+        <h3>Yours, locally</h3>
+        <p>Images save straight to your disk. Minimal knobs — prompt, size, count,
+        seed — because simple beats powerful.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="demo-strip">
+      <div class="txt">
+        <h3>Kick the tyres first</h3>
+        <p>A shared, rate-limited demo — a few images per hour, nothing stored,
+        images vanish after a while. No install, no sign-up.</p>
+      </div>
+      <a class="btn primary" href="https://demo.limn.eduserver.au">Open the demo →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>🖼️ Limn · MIT</span>
+    <a href="https://github.com/michael-borck/limn">GitHub</a>
+    <a href="https://pypi.org/project/limn/">PyPI</a>
+    <a href="https://github.com/michael-borck/limn/releases">Releases</a>
+    <a href="https://github.com/michael-borck/limn/blob/main/SPEC.md">Spec</a>
+    <span style="margin-left:auto">companion to <a href="https://github.com/michael-borck/slide-stream">slide-stream</a></span>
+  </div>
+</footer>
+
+<script>
+"use strict";
+// Resolve direct download links from the latest GitHub release. Asset names
+// carry the version, so match by stable suffix; fall back to the releases page.
+(async function () {
+  const suffixMap = {
+    "dl-mac-arm": n => n.endsWith("aarch64.dmg"),
+    "dl-mac-intel": n => n.endsWith("x64.dmg"),
+    "dl-win": n => n.endsWith("-setup.exe"),
+    "dl-win-msi": n => n.endsWith(".msi"),
+    "dl-linux": n => n.endsWith(".AppImage"),
+    "dl-linux-deb": n => n.endsWith(".deb"),
+    "dl-linux-rpm": n => n.endsWith(".rpm"),
+  };
+  try {
+    const res = await fetch("https://api.github.com/repos/michael-borck/limn/releases/latest");
+    if (!res.ok) throw new Error(res.statusText);
+    const release = await res.json();
+    for (const [id, match] of Object.entries(suffixMap)) {
+      const asset = release.assets.find(a => match(a.name));
+      const el = document.getElementById(id);
+      if (asset && el) el.href = asset.browser_download_url;
+    }
+  } catch (e) { /* fallback hrefs already point at the releases page */ }
+
+  // Highlight the visitor's platform (best effort).
+  const ua = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
+  let os = null;
+  if (ua.includes("mac")) os = "mac";
+  else if (ua.includes("win")) os = "win";
+  else if (ua.includes("linux")) os = "linux";
+  if (os) {
+    document.querySelectorAll(`.dl[data-os="${os}"]`).forEach(el => el.classList.add("detected"));
+    const heroTargets = { mac: "dl-mac-arm", win: "dl-win", linux: "dl-linux" };
+    const labels = { mac: "Download for macOS", win: "Download for Windows", linux: "Download for Linux" };
+    const hero = document.getElementById("hero-dl");
+    const target = document.getElementById(heroTargets[os]);
+    hero.textContent = "⬇ " + labels[os];
+    if (target && !target.href.endsWith("/latest")) hero.href = target.href;
+  }
+
+  document.querySelectorAll("button[data-copy]").forEach(btn => {
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(btn.dataset.copy);
+            btn.textContent = "copied!"; setTimeout(() => btn.textContent = "copy", 1500); }
+      catch (e) {}
+    };
+  });
+})();
+</script>
+</body>
+</html>

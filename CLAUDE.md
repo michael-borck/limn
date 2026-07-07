@@ -111,3 +111,17 @@ M3 (hosted demo), M4 (Tauri desktop). Release flow: bump version in
   https://github.com/michael-borck/slide-stream, published on PyPI. Its image
   providers, layered config, and `serve` web UI are the templates to adapt.
 - Repo: https://github.com/michael-borck/limn (public).
+
+## Landing page (marketing funnel)
+
+`landing/` is a self-contained page deployed to GitHub Pages by
+`.github/workflows/pages.yml` (on push to main touching landing/**), custom
+domain limn.eduserver.au (CNAME file + Pages setting; DNS: CNAME limn ->
+michael-borck.github.io). Download buttons resolve the latest release assets
+client-side via the GitHub API (asset names carry versions) with a
+releases-page fallback; visitor platform highlighted. Hero screenshots in
+landing/assets/*.webp were taken from a real session (regenerate via
+headless Chrome against `limn serve`). The demo banner in serve_page.html
+carries the same direct download links (no platform detect) + a link to the
+landing page. desktop.yml now PUBLISHES releases on desktop-v* tags
+(draft=false) because the landing page links /releases/latest.

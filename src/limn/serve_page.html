@@ -105,10 +105,14 @@
 
   <div id="demo-banner">
     <strong>Shared demo</strong> — a few images per hour, nothing is stored
-    and images vanish after a while. For unlimited, fully private use, run
-    Limn yourself: <code>pip install limn</code>
-    (<a href="https://pypi.org/project/limn/" target="_blank" rel="noopener">PyPI</a> ·
-    <a href="https://github.com/michael-borck/limn" target="_blank" rel="noopener">GitHub</a>)
+    and images vanish after a while. For unlimited, fully private use, get
+    the app:
+    <a id="dl-mac-arm" href="https://github.com/michael-borck/limn/releases/latest" target="_blank" rel="noopener">macOS (Apple&nbsp;Silicon)</a> ·
+    <a id="dl-mac-intel" href="https://github.com/michael-borck/limn/releases/latest" target="_blank" rel="noopener">macOS (Intel)</a> ·
+    <a id="dl-win" href="https://github.com/michael-borck/limn/releases/latest" target="_blank" rel="noopener">Windows</a> ·
+    <a id="dl-linux" href="https://github.com/michael-borck/limn/releases/latest" target="_blank" rel="noopener">Linux</a>
+    — or <code>pip install limn</code>
+    (<a href="https://limn.eduserver.au" target="_blank" rel="noopener">limn.eduserver.au</a>)
   </div>
 
   <div class="prompt-box">
@@ -250,6 +254,27 @@ async function generate(promptOverride, dropSeed) {
   }
 }
 
+async function resolveDownloadLinks() {
+  // Point the banner's platform links straight at the latest installers.
+  // Asset names carry the version, so resolve them via the GitHub API;
+  // on any failure the links keep their releases-page fallback.
+  const bySuffix = {
+    "dl-mac-arm": n => n.endsWith("aarch64.dmg"),
+    "dl-mac-intel": n => n.endsWith("x64.dmg"),
+    "dl-win": n => n.endsWith("-setup.exe"),
+    "dl-linux": n => n.endsWith(".AppImage"),
+  };
+  try {
+    const res = await fetch("https://api.github.com/repos/michael-borck/limn/releases/latest");
+    if (!res.ok) return;
+    const release = await res.json();
+    for (const [id, match] of Object.entries(bySuffix)) {
+      const asset = (release.assets || []).find(a => match(a.name));
+      if (asset) $(id).href = asset.browser_download_url;
+    }
+  } catch {}
+}
+
 $("go").onclick = () => generate();
 $("load-models").onclick = async () => {
   clearError();
@@ -288,6 +313,7 @@ $("prompt").addEventListener("keydown", (e) => {
       // Provider, model and count are locked server-side in demo mode.
       $("provider").closest("label").style.display = "none";
       $("count").closest("label").style.display = "none";
+      resolveDownloadLinks();
     }
     for (const name of cfg.providers) {
       const opt = document.createElement("option");
