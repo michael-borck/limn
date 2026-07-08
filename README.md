@@ -55,6 +55,8 @@ mv limn.yaml ~/.limn.yaml # personal defaults, used everywhere
 ```
 limn "a red bicycle against a brick wall" -o bike.png
 limn "watercolour fox" --provider swarmui --size 1024x1024 --count 4 --seed 42
+limn "pixel art, a fox" --lora pixel-art-xl:1.0 --cfg 5 --steps 30
+limn --from prompts.txt -M           # batch a prompt list, with metadata sidecars
 ```
 
 | Option | What |
@@ -65,6 +67,10 @@ limn "watercolour fox" --provider swarmui --size 1024x1024 --count 4 --seed 42
 | `-n, --count` | Number of images (1–10) |
 | `--seed` | Reproducibility, where the backend supports it (SwarmUI) |
 | `--negative` | Negative prompt, where supported (SwarmUI) |
+| `--lora` | LoRA as `name[:weight]`, repeatable (SwarmUI; unknown names error) |
+| `--cfg`, `--steps`, `--sampler`, `--scheduler` | SDXL knobs (SwarmUI; others warn + ignore) |
+| `--from` | Read prompts from a file (one per line, `-` for stdin); each auto-named |
+| `-M, --metadata` | Write a `<image>.json` sidecar of the generation params |
 | `-o, --out` | Output file; default is a slug of the prompt, never overwritten |
 | `-c, --config` | Explicit config file |
 
@@ -86,10 +92,19 @@ providers:            # keep several configured; swap with `provider:`
   swarmui:
     base_url: https://image.example.org
     model: juggernautXL_v9
-    api_key: "${SWARMUI_TOKEN}"
+    api_key: "${SWARMUI_TOKEN}"      # bearer; or use username/password for Basic auth
+  swarmui-basic:                     # a second server under its own label
+    type: swarmui                    #   which provider class to use
+    base_url: https://image2.example.org
+    username: admin
+    password: "${SWARMUI_PASS}"
   gemini:
     model: imagen-4.0-fast-generate-001
 ```
+
+SwarmUI auth is auto-detected: `username` + `password` → HTTP Basic (for a
+reverse proxy in front of SwarmUI), otherwise `api_key` → `Bearer`. A block's
+`type:` lets you run several servers of the same kind under distinct labels.
 
 ## Web UI
 

@@ -51,8 +51,12 @@ class GeminiProvider(ImageProvider):
 
     def unsupported(self, request: GenerateRequest) -> list[tuple[str, object]]:
         # The Gemini API's Imagen endpoint accepts neither seed nor negative
-        # prompt (both are Vertex-only features).
-        return [("--seed", request.seed), ("--negative", request.negative)]
+        # prompt (both are Vertex-only features), nor the SwarmUI-only knobs.
+        return [
+            ("--seed", request.seed),
+            ("--negative", request.negative),
+            *self._advanced_unsupported(request),
+        ]
 
     def _api_key(self, request: GenerateRequest) -> str:
         api_key = (

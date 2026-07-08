@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +25,32 @@ def parse_size(value: str) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
+def _opt_float(value: Any) -> float | None:
+    """None-preserving float cast (so an unset knob stays unset)."""
+    return None if value is None else float(value)
+
+
+def _opt_int(value: Any) -> int | None:
+    """None-preserving int cast."""
+    return None if value is None else int(value)
+
+
+def _parse_loras(raw: Any) -> list[tuple[str, float]] | None:
+    """Accept ['pixel-art-xl:1.0', ...] or [{'name':..., 'weight':...}, ...]."""
+    if not raw:
+        return None
+    out: list[tuple[str, float]] = []
+    for item in raw:
+        if isinstance(item, str):
+            name, _, w = item.partition(":")
+            out.append((name.strip(), float(w) if w.strip() else 1.0))
+        elif isinstance(item, dict):
+            out.append((str(item["name"]), float(item.get("weight", 1.0))))
+        else:
+            raise ValueError(f"Bad lora entry: {item!r}")
+    return out or None
+
+
 def build_request(prompt: str, settings: dict[str, Any]) -> GenerateRequest:
     """Build a provider request from resolved settings."""
     size = settings.get("size") or [1024, 1024]
@@ -41,12 +69,21 @@ def build_request(prompt: str, settings: dict[str, Any]) -> GenerateRequest:
         model=settings.get("model") or None,
         base_url=settings.get("base_url") or None,
         api_key=settings.get("api_key") or None,
+        username=settings.get("username") or None,
+        password=settings.get("password") or None,
         timeout=float(settings.get("timeout") or 180),
+        loras=_parse_loras(settings.get("loras")),
+        cfg_scale=_opt_float(settings.get("cfg_scale")),
+        steps=_opt_int(settings.get("steps")),
+        sampler=settings.get("sampler") or None,
+        scheduler=settings.get("scheduler") or None,
     )
 
 
 def _provider_for(settings: dict[str, Any]):
-    provider_name = settings.get("provider")
+    # A named endpoint block may set 'type' to pick the provider class while
+    # 'provider' stays the user-facing label (e.g. two SwarmUI servers).
+    provider_name = settings.get("type") or settings.get("provider")
     if not provider_name:
         raise ValueError(
             "No provider configured. Set 'provider:' in ~/.limn.yaml "
@@ -63,6 +100,64 @@ def generate(prompt: str, settings: dict[str, Any]) -> list[GeneratedImage]:
 def list_models(settings: dict[str, Any]) -> list[str]:
     """Model names offered by the provider named in settings."""
     return _provider_for(settings).list_models(build_request("", settings))
+
+
+def read_prompts(source: str) -> list[str]:
+    """Read prompts from a file (or stdin when source is '-'), one per line.
+
+    Blank lines and ``#`` comments are skipped, so a prompt list can be
+    annotated. Returns the prompts in file order.
+    """
+    if source == "-":
+        text = sys.stdin.read()
+    else:
+        path = Path(source)
+        if not path.exists():
+            raise ValueError(f"Prompt file not found: {source}")
+        text = path.read_text(encoding="utf-8")
+    prompts = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not prompts:
+        raise ValueError(f"No prompts found in {source}")
+    return prompts
+
+
+def metadata_for(
+    prompt: str, settings: dict[str, Any], image: GeneratedImage
+) -> dict[str, Any]:
+    """Reproducibility sidecar: the params that produced one image.
+
+    Only non-empty generation fields are recorded (a clean, diffable record).
+    """
+    meta: dict[str, Any] = {
+        "prompt": prompt,
+        "provider": settings.get("provider"),
+    }
+    if settings.get("type"):
+        meta["type"] = settings["type"]
+    if settings.get("model"):
+        meta["model"] = settings["model"]
+    size = settings.get("size")
+    if size:
+        meta["size"] = list(size)
+    seed = image.seed if image.seed is not None else settings.get("seed")
+    if seed is not None:
+        meta["seed"] = seed
+    for key in ("negative", "loras", "cfg_scale", "steps", "sampler", "scheduler"):
+        value = settings.get(key)
+        if value is not None:
+            meta[key] = value
+    return meta
+
+
+def write_metadata(image_path: Path, metadata: dict[str, Any]) -> Path:
+    """Write a ``<image>.json`` sidecar next to an image; return its path."""
+    sidecar = image_path.with_suffix(image_path.suffix + ".json")
+    sidecar.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    return sidecar
 
 
 def image_extension(data: bytes) -> str:

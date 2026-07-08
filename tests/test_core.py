@@ -5,12 +5,16 @@ from __future__ import annotations
 import pytest
 
 from limn.core import (
+    _parse_loras,
     build_request,
     generate,
     image_extension,
+    metadata_for,
     parse_size,
+    read_prompts,
     save_images,
     slugify,
+    write_metadata,
 )
 from limn.providers import GeneratedImage
 from tests.conftest import JPEG_BYTES, PNG_BYTES
@@ -64,6 +68,99 @@ def test_build_request_maps_settings():
     assert req.seed == 42
     assert req.negative == "text"
     assert req.timeout == 60.0
+
+
+def test_parse_loras_forms():
+    assert _parse_loras(["pixel-art-xl"]) == [("pixel-art-xl", 1.0)]
+    assert _parse_loras(["pixel-art-xl:0.8"]) == [("pixel-art-xl", 0.8)]
+    assert _parse_loras([{"name": "x", "weight": 0.5}]) == [("x", 0.5)]
+    assert _parse_loras([{"name": "x"}]) == [("x", 1.0)]
+    assert _parse_loras([]) is None
+    assert _parse_loras(None) is None
+
+
+def test_parse_loras_bad_entry():
+    with pytest.raises(ValueError):
+        _parse_loras([123])
+
+
+def test_build_request_maps_advanced_and_auth():
+    req = build_request(
+        "a fox",
+        {
+            "username": "admin",
+            "password": "pw",
+            "loras": ["pixel-art-xl:0.9"],
+            "cfg_scale": 5,
+            "steps": 30,
+            "sampler": "euler",
+            "scheduler": "normal",
+        },
+    )
+    assert req.username == "admin"
+    assert req.password == "pw"
+    assert req.loras == [("pixel-art-xl", 0.9)]
+    assert req.cfg_scale == 5.0
+    assert req.steps == 30
+    assert req.sampler == "euler"
+    assert req.scheduler == "normal"
+
+
+def test_build_request_advanced_default_none():
+    req = build_request("a fox", {})
+    assert req.loras is None
+    assert req.cfg_scale is None
+    assert req.steps is None
+    assert req.username is None
+
+
+def test_read_prompts_from_file(tmp_path):
+    f = tmp_path / "prompts.txt"
+    f.write_text("a fox\n\n# a comment\n  a bear  \n")
+    assert read_prompts(str(f)) == ["a fox", "a bear"]
+
+
+def test_read_prompts_missing_file():
+    with pytest.raises(ValueError, match="not found"):
+        read_prompts("/no/such/file.txt")
+
+
+def test_read_prompts_empty(tmp_path):
+    f = tmp_path / "empty.txt"
+    f.write_text("# only comments\n\n")
+    with pytest.raises(ValueError, match="No prompts"):
+        read_prompts(str(f))
+
+
+def test_metadata_for_records_set_params():
+    settings = {
+        "provider": "swarmui-basic",
+        "type": "swarmui",
+        "model": "juggernautXL_v9",
+        "size": [512, 768],
+        "seed": None,
+        "loras": ["pixel-art-xl:1.0"],
+        "cfg_scale": 5,
+        "negative": None,
+    }
+    meta = metadata_for("a fox", settings, GeneratedImage(PNG_BYTES, seed=42))
+    assert meta["prompt"] == "a fox"
+    assert meta["provider"] == "swarmui-basic"
+    assert meta["type"] == "swarmui"
+    assert meta["model"] == "juggernautXL_v9"
+    assert meta["size"] == [512, 768]
+    assert meta["seed"] == 42  # from the generated image
+    assert meta["loras"] == ["pixel-art-xl:1.0"]
+    assert meta["cfg_scale"] == 5
+    assert "negative" not in meta  # None-valued fields are dropped
+
+
+def test_write_metadata_sidecar(tmp_path):
+    img = tmp_path / "fox.png"
+    img.write_bytes(PNG_BYTES)
+    sidecar = write_metadata(img, {"prompt": "a fox"})
+    assert sidecar.name == "fox.png.json"
+    assert "a fox" in sidecar.read_text()
 
 
 def test_build_request_rejects_bad_size():

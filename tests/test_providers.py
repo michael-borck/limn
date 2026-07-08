@@ -158,6 +158,174 @@ def test_gemini_list_models(monkeypatch):
     ]
 
 
+def test_swarmui_basic_auth(monkeypatch):
+    seen: dict = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen["headers"] = headers
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        return FakeResponse({"images": ["View/a.png"]})
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.get",
+        lambda url, headers=None, timeout=None: FakeResponse(content=PNG_BYTES),
+    )
+    request = GenerateRequest(
+        prompt="a fox",
+        base_url="https://s.example.org",
+        username="admin",
+        password="secret",
+    )
+    SwarmUIProvider().generate(request)
+    # base64("admin:secret") == "YWRtaW46c2VjcmV0"
+    assert seen["headers"]["Authorization"] == "Basic YWRtaW46c2VjcmV0"
+
+
+def test_swarmui_basic_auth_wins_over_bearer(monkeypatch):
+    seen: dict = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen["headers"] = headers
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        return FakeResponse({"images": ["View/a.png"]})
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.get",
+        lambda url, headers=None, timeout=None: FakeResponse(content=PNG_BYTES),
+    )
+    request = GenerateRequest(
+        prompt="a fox",
+        base_url="https://s.example.org",
+        api_key="tok",
+        username="admin",
+        password="secret",
+    )
+    SwarmUIProvider().generate(request)
+    assert seen["headers"]["Authorization"].startswith("Basic ")
+
+
+def test_swarmui_bearer_when_only_token(monkeypatch):
+    seen: dict = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen["headers"] = headers
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        return FakeResponse({"images": ["View/a.png"]})
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.get",
+        lambda url, headers=None, timeout=None: FakeResponse(content=PNG_BYTES),
+    )
+    request = GenerateRequest(
+        prompt="a fox", base_url="https://s.example.org", api_key="tok"
+    )
+    SwarmUIProvider().generate(request)
+    assert seen["headers"]["Authorization"] == "Bearer tok"
+
+
+def _swarmui_faker(gen_payload: dict, lora_files: list[str] | None = None):
+    """A fake requests.post covering session, LoRA listing, and generate."""
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        if url.endswith("/API/ListModels"):
+            files = [{"name": n} for n in (lora_files or [])]
+            return FakeResponse({"files": files})
+        gen_payload.update(json or {})
+        return FakeResponse({"images": ["View/a.png"]})
+
+    return fake_post
+
+
+def test_swarmui_lora_and_params(monkeypatch):
+    payload: dict = {}
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.post",
+        _swarmui_faker(
+            payload,
+            lora_files=["pixel-art-xl.safetensors", "styles/detail.safetensors"],
+        ),
+    )
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.get",
+        lambda url, headers=None, timeout=None: FakeResponse(content=PNG_BYTES),
+    )
+    request = GenerateRequest(
+        prompt="a fox",
+        base_url="https://s.example.org",
+        loras=[("pixel-art-xl", 1.0), ("detail", 0.5)],
+        cfg_scale=5.0,
+        steps=30,
+        sampler="euler",
+        scheduler="normal",
+    )
+    SwarmUIProvider().generate(request)
+    assert payload["loras"] == "pixel-art-xl,detail"
+    assert payload["loraweights"] == "1,0.5"
+    assert payload["cfgscale"] == 5.0
+    assert payload["steps"] == 30
+    assert payload["sampler"] == "euler"
+    assert payload["scheduler"] == "normal"
+
+
+def test_swarmui_unknown_lora_raises(monkeypatch):
+    payload: dict = {}
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.post",
+        _swarmui_faker(payload, lora_files=["pixel-art-xl.safetensors"]),
+    )
+    request = GenerateRequest(
+        prompt="a fox",
+        base_url="https://s.example.org",
+        loras=[("does-not-exist", 1.0)],
+    )
+    with pytest.raises(ProviderError, match="LoRA not found"):
+        SwarmUIProvider().generate(request)
+
+
+def test_swarmui_lora_validation_skipped_when_list_fails(monkeypatch):
+    payload: dict = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        if url.endswith("/API/ListModels"):
+            return FakeResponse(status_code=500)  # can't enumerate
+        payload.update(json or {})
+        return FakeResponse({"images": ["View/a.png"]})
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    monkeypatch.setattr(
+        "limn.providers.swarmui.requests.get",
+        lambda url, headers=None, timeout=None: FakeResponse(content=PNG_BYTES),
+    )
+    request = GenerateRequest(
+        prompt="a fox", base_url="https://s.example.org", loras=[("anything", 1.0)]
+    )
+    SwarmUIProvider().generate(request)  # does not raise
+    assert payload["loras"] == "anything"
+
+
+def test_non_swarmui_warns_on_advanced_params():
+    provider = OpenAICompatibleProvider()
+    labels = [
+        label
+        for label, value in provider.unsupported(
+            GenerateRequest(prompt="x", loras=[("a", 1.0)], cfg_scale=5.0)
+        )
+        if value is not None
+    ]
+    assert "--lora" in labels
+    assert "--cfg" in labels
+
+
 def test_swarmui_requires_base_url():
     with pytest.raises(ProviderError, match="base_url"):
         SwarmUIProvider().generate(GenerateRequest(prompt="a fox"))

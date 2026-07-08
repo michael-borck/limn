@@ -34,10 +34,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "base_url": None,
     "model": None,
     "api_key": None,
+    "username": None,
+    "password": None,
     "size": [1024, 1024],
     "count": 1,
     "seed": None,
     "negative": None,
+    "loras": None,
+    "cfg_scale": None,
+    "steps": None,
+    "sampler": None,
+    "scheduler": None,
     "timeout": 180,
     "providers": {},
 }
@@ -139,6 +146,12 @@ def resolve_settings(config: dict[str, Any], provider: str) -> dict[str, Any]:
 
     Top-level keys are the base; an entry under ``providers.<name>`` overrides
     them, so a config can keep swarmui, gemini, ... configured side by side.
+
+    The ``<name>`` is normally a canonical provider type (``swarmui``), but a
+    block may set ``type:`` to point at a type explicitly — letting you run two
+    servers of the same type under distinct labels (e.g. ``swarmui-bearer`` and
+    ``swarmui-basic``, both ``type: swarmui``). ``settings['provider']`` keeps
+    the label for display; the class is resolved from ``type`` (see core).
     """
     settings = {k: v for k, v in config.items() if k != "providers"}
     per_provider = config.get("providers") or {}
@@ -168,13 +181,32 @@ size: [1024, 1024]
 # seed: 42
 # negative: "text, watermark"
 
+# Advanced generation controls (SwarmUI only; other providers warn + ignore):
+# loras:                              # applied to every generation
+#   - pixel-art-xl:1.0                #   name:weight (weight optional, default 1)
+# cfg_scale: 5                        # lower = looser/more stylized (try 4-6)
+# steps: 30
+# sampler: euler                      # provider-specific sampler name
+# scheduler: normal
+
 # Per-provider settings (only the active provider's block is used, so you can
 # keep several configured and swap with `provider:` or --provider):
 providers:
   swarmui:
     base_url: https://image.example.org
     model: juggernautXL_v9
-    # api_key: "${SWARMUI_TOKEN}"     # only if fronted by auth
+    # Auth (pick one). Bearer = SwarmUI's own token; Basic = reverse-proxy auth:
+    # api_key: "${SWARMUI_TOKEN}"     # -> Authorization: Bearer ...
+    # username: admin                 # -> Authorization: Basic ... (with password)
+    # password: "${SWARMUI_PASS}"
+
+  # A second SwarmUI server behind HTTP Basic auth, under its own label.
+  # Select it with `provider: swarmui-basic` or --provider swarmui-basic:
+  # swarmui-basic:
+  #   type: swarmui                   # which provider class to use
+  #   base_url: https://image2.example.org
+  #   username: admin
+  #   password: "${SWARMUI_PASS}"
 
   openai-compatible:                  # LocalAI, or any /v1/images endpoint
     base_url: http://localhost:8080/v1

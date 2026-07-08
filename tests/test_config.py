@@ -96,6 +96,29 @@ def test_resolve_settings_per_provider_override(isolated_config):
     assert "providers" not in gemini
 
 
+def test_resolve_named_endpoint_with_type(isolated_config):
+    _, cwd = isolated_config
+    (cwd / "limn.yaml").write_text(
+        "provider: swarmui-basic\n"
+        "providers:\n"
+        "  swarmui-basic:\n"
+        "    type: swarmui\n"
+        "    base_url: https://image2.example.org\n"
+        "    username: admin\n"
+    )
+    cfg = load_config()
+    settings = resolve_settings(cfg, "swarmui-basic")
+    assert settings["provider"] == "swarmui-basic"  # label preserved for display
+    assert settings["type"] == "swarmui"  # class resolved from type
+    assert settings["username"] == "admin"
+
+    # core resolves the provider class from `type`, not the label.
+    from limn.core import _provider_for
+    from limn.providers.swarmui import SwarmUIProvider
+
+    assert isinstance(_provider_for(settings), SwarmUIProvider)
+
+
 def test_save_example_config(isolated_config):
     path = save_example_config()
     assert path.exists()

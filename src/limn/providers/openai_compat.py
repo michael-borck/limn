@@ -32,8 +32,13 @@ class OpenAIProvider(ImageProvider):
     require_api_key = True
 
     def unsupported(self, request: GenerateRequest) -> list[tuple[str, object]]:
-        # The /v1/images API has no seed or negative-prompt parameters.
-        return [("--seed", request.seed), ("--negative", request.negative)]
+        # The /v1/images API has no seed or negative-prompt parameters, nor the
+        # SwarmUI-only LoRA / sampler knobs.
+        return [
+            ("--seed", request.seed),
+            ("--negative", request.negative),
+            *self._advanced_unsupported(request),
+        ]
 
     def _base_url(self, request: GenerateRequest) -> str:
         base_url = request.base_url or self.default_base_url

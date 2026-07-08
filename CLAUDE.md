@@ -13,6 +13,28 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.2: LoRA + gen params, dual SwarmUI auth, batch, metadata.**
+- SwarmUI auth auto-detects: `username`+`password` → HTTP Basic (reverse-proxy
+  auth), else `api_key` → Bearer (`swarmui.py._connection`). `GenerateRequest`
+  gained `username`/`password`.
+- Advanced gen controls plumbed generically and mapped only in SwarmUI:
+  `loras` (list of `name:weight`, native `loras`/`loraweights` comma-joined),
+  `cfg_scale`→`cfgscale`, `steps`, `sampler`, `scheduler`. Other providers list
+  them in `unsupported()` (shared `base._advanced_unsupported`) so they warn +
+  ignore. Unknown LoRA names fail loudly, validated best-effort against
+  `/API/ListModels` subtype `LoRA` (a failed lookup skips validation, never
+  blocks). CLI: `--lora` (repeatable), `--cfg/--steps/--sampler/--scheduler`.
+- Named endpoints: a `providers.<label>` block may set `type: swarmui` to run
+  two servers of one kind under distinct labels; `core._provider_for` resolves
+  the class from `type` (falls back to the label). Answers "two SwarmUI servers"
+  (one bearer at swarmui.locopuente.org, one Basic at image.locopuente.org).
+- CLI batch: `--from FILE` (`-` = stdin), one prompt/line, skips blank/`#`;
+  each auto-named. `-M/--metadata` writes a `<image>.json` reproducibility
+  sidecar (`core.metadata_for`/`write_metadata`). serve UI unchanged (scope).
+- Verified live vs swarmui.locopuente.org (bearer): models, generate+sidecar,
+  batch, bogus-LoRA rejection (exit 1). Basic auth covered by unit tests only
+  (no creds for the second server). 85 tests green, ruff clean, 0 type errors.
+
 **0.4.0: provider model listing.** `list_models()` on every provider
 (SwarmUI /API/ListModels with weight-extension stripping — the generate API
 wants bare names like "juggernautXL_v9"; OpenAI /models filtered to image

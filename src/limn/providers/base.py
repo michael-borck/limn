@@ -31,7 +31,15 @@ class GenerateRequest:
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
     timeout: float = 180.0
+    # Advanced generation controls (provider-dependent; see unsupported()).
+    loras: list[tuple[str, float]] | None = None  # (name, weight) pairs
+    cfg_scale: float | None = None
+    steps: int | None = None
+    sampler: str | None = None
+    scheduler: str | None = None
 
 
 @dataclass
@@ -71,3 +79,15 @@ class ImageProvider(ABC):
     def unsupported(self, request: GenerateRequest) -> list[tuple[str, object]]:
         """(label, value) pairs of request fields this backend ignores."""
         return []
+
+    def _advanced_unsupported(
+        self, request: GenerateRequest
+    ) -> list[tuple[str, object]]:
+        """The SwarmUI-only knobs; providers that lack them mix this in."""
+        return [
+            ("--lora", request.loras),
+            ("--cfg", request.cfg_scale),
+            ("--steps", request.steps),
+            ("--sampler", request.sampler),
+            ("--scheduler", request.scheduler),
+        ]

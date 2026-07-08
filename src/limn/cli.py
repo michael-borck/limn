@@ -13,7 +13,13 @@ from limn.config import ConfigurationError, load_config, resolve_settings
 from limn.config import save_example_config as _save_example_config
 from limn.core import generate as _generate
 from limn.core import list_models as _list_models
-from limn.core import parse_size, save_images
+from limn.core import (
+    metadata_for,
+    parse_size,
+    read_prompts,
+    save_images,
+    write_metadata,
+)
 from limn.providers import ProviderError
 
 console = Console()
@@ -100,9 +106,45 @@ def generate(
         None, "--negative", help="Negative prompt (if supported).",
         show_default=False,
     ),
+    lora: list[str] = typer.Option(
+        None,
+        "--lora",
+        help="LoRA as name[:weight], repeatable (SwarmUI only). "
+        "e.g. --lora pixel-art-xl:1.0",
+        show_default=False,
+    ),
+    cfg_scale: float = typer.Option(
+        None, "--cfg", help="CFG / guidance scale (if supported).",
+        show_default=False,
+    ),
+    steps: int = typer.Option(
+        None, "--steps", help="Sampling steps (if supported).",
+        show_default=False,
+    ),
+    sampler: str = typer.Option(
+        None, "--sampler", help="Sampler name (provider-specific).",
+        show_default=False,
+    ),
+    scheduler: str = typer.Option(
+        None, "--scheduler", help="Scheduler name (provider-specific).",
+        show_default=False,
+    ),
     out: str = typer.Option(
         None, "--out", "-o", help="Output file (default: derived from prompt).",
         show_default=False,
+    ),
+    from_file: str = typer.Option(
+        None,
+        "--from",
+        help="Read prompts from a file (one per line, '-' for stdin); "
+        "each is generated and auto-named.",
+        show_default=False,
+    ),
+    metadata: bool = typer.Option(
+        False,
+        "--metadata",
+        "-M",
+        help="Write a <image>.json sidecar of the generation params.",
     ),
     config: str = typer.Option(
         None, "--config", "-c", help="Config file (default: ./limn.yaml).",
@@ -117,6 +159,10 @@ def generate(
     Configure once in ~/.limn.yaml (provider, server URL / API key), then:
 
         limn "a red bicycle against a brick wall" -o bike.png
+
+    Batch a list of prompts (one per line, auto-named):
+
+        limn --from prompts.txt
     """
     try:
         if init_config:
@@ -124,7 +170,13 @@ def generate(
             console.print(f"Wrote example config: [bold]{path}[/bold]")
             raise typer.Exit()
 
-        if not prompt:
+        if from_file and prompt:
+            err_console.print("Give a prompt or --from FILE, not both.")
+            raise typer.Exit(code=2)
+        if from_file and out:
+            err_console.print("--out can't be used with --from (names are derived).")
+            raise typer.Exit(code=2)
+        if not from_file and not prompt:
             err_console.print("Give me a prompt, e.g.: limn \"a red bicycle\"")
             raise typer.Exit(code=2)
 
@@ -148,18 +200,42 @@ def generate(
             settings["seed"] = seed
         if negative is not None:
             settings["negative"] = negative
+        if lora:
+            settings["loras"] = list(lora)  # _parse_loras handles name:weight
+        if cfg_scale is not None:
+            settings["cfg_scale"] = cfg_scale
+        if steps is not None:
+            settings["steps"] = steps
+        if sampler is not None:
+            settings["sampler"] = sampler
+        if scheduler is not None:
+            settings["scheduler"] = scheduler
 
-        with console.status(
-            f"Generating with {provider_name}...", spinner="dots"
-        ):
-            images = _generate(prompt, settings)
-        paths = save_images(images, prompt, out)
-        for path in paths:
-            console.print(f"Saved: [bold green]{path}[/bold green]")
+        prompts = read_prompts(from_file) if from_file else [prompt]
+        for item in prompts:
+            _run_one(item, settings, out, metadata, str(provider_name))
 
     except (ConfigurationError, ProviderError, ValueError) as e:
         err_console.print(str(e))
         raise typer.Exit(code=1) from None
+
+
+def _run_one(
+    prompt: str,
+    settings: dict[str, Any],
+    out: str | None,
+    metadata: bool,
+    provider_name: str,
+) -> None:
+    """Generate, save, and (optionally) sidecar one prompt."""
+    with console.status(f"Generating with {provider_name}...", spinner="dots"):
+        images = _generate(prompt, settings)
+    paths = save_images(images, prompt, out)
+    for path, image in zip(paths, images, strict=True):
+        console.print(f"Saved: [bold green]{path}[/bold green]")
+        if metadata:
+            sidecar = write_metadata(path, metadata_for(prompt, settings, image))
+            console.print(f"  metadata: [dim]{sidecar}[/dim]")
 
 
 @app.command()
