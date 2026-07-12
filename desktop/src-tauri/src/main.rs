@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 
 /// The limn release the runtime installs; bump together with PyPI releases.
-const LIMN_VERSION: &str = "0.4.2";
+const LIMN_VERSION: &str = "0.4.3";
 
 struct Sidecar(Mutex<Option<Child>>);
 
