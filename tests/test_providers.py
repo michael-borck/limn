@@ -113,6 +113,60 @@ def test_swarmui_list_models(monkeypatch):
     ]
 
 
+def test_swarmui_list_loras(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        if url.endswith("/API/GetNewSession"):
+            return FakeResponse({"session_id": "s-1"})
+        assert url.endswith("/API/ListModels")
+        assert (json or {}).get("subtype") == "LoRA"
+        return FakeResponse(
+            {
+                "folders": [],
+                "files": [
+                    {
+                        "name": "styles/watercolor-v2.safetensors",
+                        "trigger_phrase": "w4t3rc0l0r style",
+                        "description": "<p>Soft <b>watercolor</b> washes.</p>",
+                        "usage_hint": "best at weight 0.8",
+                    },
+                    # No metadata on the server -> bare name, Nones.
+                    {"name": "pixel-art-xl.safetensors", "trigger_phrase": ""},
+                ],
+            }
+        )
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    request = GenerateRequest(prompt="", base_url="https://s.example.org")
+    loras = SwarmUIProvider().list_loras(request)
+    assert [lora.name for lora in loras] == [
+        "styles/watercolor-v2",
+        "pixel-art-xl",
+    ]
+    assert loras[0].trigger_phrase == "w4t3rc0l0r style"
+    assert loras[0].description == "Soft watercolor washes. (best at weight 0.8)"
+    assert loras[1].trigger_phrase is None
+    assert loras[1].description is None
+
+
+def test_swarmui_list_loras_surfaces_errors(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return FakeResponse({}, status_code=500)
+
+    monkeypatch.setattr("limn.providers.swarmui.requests.post", fake_post)
+    request = GenerateRequest(prompt="", base_url="https://s.example.org")
+    with pytest.raises(ProviderError, match="SwarmUI error"):
+        SwarmUIProvider().list_loras(request)
+
+
+@pytest.mark.parametrize(
+    "provider", [OpenAIProvider(), OpenAICompatibleProvider(), GeminiProvider()]
+)
+def test_non_swarmui_list_loras_raises(provider):
+    request = GenerateRequest(prompt="", base_url="https://x.example.org", api_key="k")
+    with pytest.raises(ProviderError, match="no LoRA support"):
+        provider.list_loras(request)
+
+
 def test_openai_list_models_filters_images(monkeypatch):
     def fake_get(url, headers=None, timeout=None):
         assert url == "https://api.openai.com/v1/models"

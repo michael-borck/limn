@@ -13,6 +13,12 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.3: LoRA discovery.** `limn models --loras` lists the server's LoRAs with
+trigger phrase + description from SwarmUI model metadata (`LoraInfo` in
+`providers/base.py`, `SwarmUIProvider.list_loras`, `core.list_loras`). Other
+providers raise "no LoRA support". Long Civitai trained-word dumps are clipped
+to 160 chars in the CLI. Verified live vs swarmui.locopuente.org. 92 tests.
+
 **0.4.2: LoRA + gen params, dual SwarmUI auth, batch, metadata.**
 - SwarmUI auth auto-detects: `username`+`password` → HTTP Basic (reverse-proxy
   auth), else `api_key` → Bearer (`swarmui.py._connection`). `GenerateRequest`

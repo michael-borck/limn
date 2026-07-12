@@ -76,7 +76,10 @@ limn --from prompts.txt -M           # batch a prompt list, with metadata sideca
 
 `limn models` asks your provider which models it offers (SwarmUI requires
 picking one — e.g. `limn "a fox" -m juggernautXL_v9`). The web UI and desktop
-Settings have a matching "fetch models" button.
+Settings have a matching "fetch models" button. `limn models --loras` lists
+the server's LoRAs instead (SwarmUI only), including the trigger phrase and
+description when the server has that metadata — many LoRAs only kick in when
+their trigger word appears in the prompt.
 
 ## Config
 

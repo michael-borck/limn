@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from limn.providers import GeneratedImage, GenerateRequest, get_provider
+from limn.providers import GeneratedImage, GenerateRequest, LoraInfo, get_provider
 
 _SIZE_RE = re.compile(r"^(\d+)\s*[xX]\s*(\d+)$")
 
@@ -100,6 +100,11 @@ def generate(prompt: str, settings: dict[str, Any]) -> list[GeneratedImage]:
 def list_models(settings: dict[str, Any]) -> list[str]:
     """Model names offered by the provider named in settings."""
     return _provider_for(settings).list_models(build_request("", settings))
+
+
+def list_loras(settings: dict[str, Any]) -> list[LoraInfo]:
+    """LoRAs offered by the provider named in settings."""
+    return _provider_for(settings).list_loras(build_request("", settings))
 
 
 def read_prompts(source: str) -> list[str]:

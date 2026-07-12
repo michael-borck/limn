@@ -6,12 +6,14 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from typer.core import TyperGroup
 
 from limn import __version__
 from limn.config import ConfigurationError, load_config, resolve_settings
 from limn.config import save_example_config as _save_example_config
 from limn.core import generate as _generate
+from limn.core import list_loras as _list_loras
 from limn.core import list_models as _list_models
 from limn.core import (
     metadata_for,
@@ -20,7 +22,7 @@ from limn.core import (
     save_images,
     write_metadata,
 )
-from limn.providers import ProviderError
+from limn.providers import LoraInfo, ProviderError
 
 console = Console()
 err_console = Console(stderr=True, style="bold red")
@@ -248,8 +250,13 @@ def models(
         None, "--config", "-c", help="Config file (default: ./limn.yaml).",
         show_default=False,
     ),
+    loras: bool = typer.Option(
+        False,
+        "--loras",
+        help="List LoRAs instead, with trigger words where the server has them.",
+    ),
 ) -> None:
-    """List the models your provider offers."""
+    """List the models (or, with --loras, the LoRAs) your provider offers."""
     try:
         cfg = load_config(config)
         provider_name = provider or cfg.get("provider")
@@ -259,6 +266,9 @@ def models(
             )
             raise typer.Exit(code=2)
         settings = resolve_settings(cfg, str(provider_name))
+        if loras:
+            _print_loras(_list_loras(settings))
+            return
         names = _list_models(settings)
         if not names:
             console.print("[dim]No models reported.[/dim]")
@@ -267,6 +277,27 @@ def models(
     except (ConfigurationError, ProviderError, ValueError) as e:
         err_console.print(str(e))
         raise typer.Exit(code=1) from None
+
+
+def _clip(text: str, limit: int = 160) -> str:
+    """Some servers store Civitai's full trained-word dump as the trigger
+    phrase; keep the listing scannable (the real token leads the list)."""
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _print_loras(infos: list[LoraInfo]) -> None:
+    """One LoRA per block: name, then whatever metadata the server has."""
+    if not infos:
+        console.print("[dim]No LoRAs reported.[/dim]")
+        return
+    for info in infos:
+        console.print(f"[bold]{escape(info.name)}[/bold]")
+        if info.trigger_phrase:
+            console.print(
+                f"  trigger: [cyan]{escape(_clip(info.trigger_phrase))}[/cyan]"
+            )
+        if info.description:
+            console.print(f"  [dim]{escape(_clip(info.description))}[/dim]")
 
 
 @app.command()

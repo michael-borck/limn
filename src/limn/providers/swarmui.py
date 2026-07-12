@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from typing import Any
 
 import requests
@@ -17,6 +18,7 @@ from limn.providers.base import (
     GeneratedImage,
     GenerateRequest,
     ImageProvider,
+    LoraInfo,
     ProviderError,
 )
 
@@ -30,6 +32,13 @@ def _strip_weight_extension(name: str) -> str:
         if name.endswith(ext):
             return name[: -len(ext)]
     return name
+
+
+def _clean_text(value: Any) -> str | None:
+    """Model descriptions are often Civitai HTML; flatten to one plain line."""
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    text = " ".join(text.split())
+    return text or None
 
 
 class SwarmUIProvider(ImageProvider):
@@ -56,6 +65,41 @@ class SwarmUIProvider(ImageProvider):
             headers["Authorization"] = f"Bearer {api_key}"
         return base_url.rstrip("/"), headers
 
+    def _new_session(self, base_url: str, headers: dict[str, str]) -> str:
+        response = requests.post(
+            f"{base_url}/API/GetNewSession",
+            json={},
+            headers=headers,
+            timeout=30,
+        )
+        response.raise_for_status()
+        return str(response.json()["session_id"])
+
+    def _list_files(
+        self,
+        base_url: str,
+        headers: dict[str, str],
+        session_id: str,
+        subtype: str,
+        depth: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Raw /API/ListModels entries of one subtype (named files only)."""
+        response = requests.post(
+            f"{base_url}/API/ListModels",
+            json={
+                "session_id": session_id,
+                "path": "",
+                "depth": depth,
+                "subtype": subtype,
+                "sortBy": "Name",
+            },
+            headers=headers,
+            timeout=60,
+        )
+        response.raise_for_status()
+        files = response.json().get("files") or []
+        return [f for f in files if isinstance(f, dict) and f.get("name")]
+
     def _known_loras(
         self, base_url: str, headers: dict[str, str], session_id: str
     ) -> set[str] | None:
@@ -67,28 +111,14 @@ class SwarmUIProvider(ImageProvider):
         with a subfolder prefix — index both the full path and its basename.
         """
         try:
-            response = requests.post(
-                f"{base_url}/API/ListModels",
-                json={
-                    "session_id": session_id,
-                    "path": "",
-                    "depth": 10,
-                    "subtype": "LoRA",
-                    "sortBy": "Name",
-                },
-                headers=headers,
-                timeout=30,
-            )
-            response.raise_for_status()
-            files = response.json().get("files") or []
+            files = self._list_files(base_url, headers, session_id, "LoRA")
         except (requests.RequestException, KeyError, ValueError):
             return None
         known: set[str] = set()
         for f in files:
-            if isinstance(f, dict) and f.get("name"):
-                name = _strip_weight_extension(str(f["name"]))
-                known.add(name.lower())
-                known.add(name.rsplit("/", 1)[-1].lower())
+            name = _strip_weight_extension(str(f["name"]))
+            known.add(name.lower())
+            known.add(name.rsplit("/", 1)[-1].lower())
         return known
 
     def _validate_loras(
@@ -112,36 +142,43 @@ class SwarmUIProvider(ImageProvider):
     def list_models(self, request: GenerateRequest) -> list[str]:
         base_url, headers = self._connection(request)
         try:
-            session = requests.post(
-                f"{base_url}/API/GetNewSession",
-                json={},
-                headers=headers,
-                timeout=30,
+            session_id = self._new_session(base_url, headers)
+            files = self._list_files(
+                base_url, headers, session_id, "Stable-Diffusion", depth=5
             )
-            session.raise_for_status()
-            session_id = session.json()["session_id"]
-
-            response = requests.post(
-                f"{base_url}/API/ListModels",
-                json={
-                    "session_id": session_id,
-                    "path": "",
-                    "depth": 5,
-                    "subtype": "Stable-Diffusion",
-                    "sortBy": "Name",
-                },
-                headers=headers,
-                timeout=60,
-            )
-            response.raise_for_status()
-            files = response.json().get("files") or []
-            return [
-                _strip_weight_extension(str(f["name"]))
-                for f in files
-                if isinstance(f, dict) and f.get("name")
-            ]
+            return [_strip_weight_extension(str(f["name"])) for f in files]
         except (requests.RequestException, KeyError, ValueError) as e:
             raise ProviderError(f"SwarmUI error: {e}") from e
+
+    def list_loras(self, request: GenerateRequest) -> list[LoraInfo]:
+        """LoRAs with the metadata SwarmUI stores per model file.
+
+        trigger_phrase comes from the server's model metadata (often imported
+        from Civitai's "trained words", or hand-edited in SwarmUI's model
+        editor). A file the server has no metadata for yields bare name only.
+        """
+        base_url, headers = self._connection(request)
+        try:
+            session_id = self._new_session(base_url, headers)
+            files = self._list_files(base_url, headers, session_id, "LoRA")
+        except (requests.RequestException, KeyError, ValueError) as e:
+            raise ProviderError(f"SwarmUI error: {e}") from e
+        loras: list[LoraInfo] = []
+        for f in files:
+            description = _clean_text(f.get("description"))
+            usage_hint = _clean_text(f.get("usage_hint"))
+            if usage_hint:
+                description = (
+                    f"{description} ({usage_hint})" if description else usage_hint
+                )
+            loras.append(
+                LoraInfo(
+                    name=_strip_weight_extension(str(f["name"])),
+                    trigger_phrase=_clean_text(f.get("trigger_phrase")),
+                    description=description,
+                )
+            )
+        return loras
 
     def generate(self, request: GenerateRequest) -> list[GeneratedImage]:
         base_url, headers = self._connection(request)

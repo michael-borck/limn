@@ -50,6 +50,19 @@ class GeneratedImage:
     seed: int | None = None
 
 
+@dataclass
+class LoraInfo:
+    """One LoRA the backend offers, plus whatever metadata it stores.
+
+    trigger_phrase/description are None when the server has no metadata for
+    the file — absence means "unknown", not "no trigger needed".
+    """
+
+    name: str
+    trigger_phrase: str | None = None
+    description: str | None = None
+
+
 class ImageProvider(ABC):
     """One backend: turn a GenerateRequest into image bytes."""
 
@@ -66,6 +79,14 @@ class ImageProvider(ABC):
         Raises ProviderError on failure or when the backend can't enumerate.
         """
         raise ProviderError(f"Provider '{self.name}' cannot list models.")
+
+    def list_loras(self, request: GenerateRequest) -> list[LoraInfo]:
+        """LoRAs this backend offers (prompt in ``request`` is unused).
+
+        Raises ProviderError on failure or when the backend has no LoRA
+        concept (hosted APIs like OpenAI/Gemini).
+        """
+        raise ProviderError(f"Provider '{self.name}' has no LoRA support.")
 
     def warn_unsupported(self, request: GenerateRequest) -> None:
         """Tell the user (stderr) about request fields this backend ignores."""

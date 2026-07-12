@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from limn import __version__
 from limn.cli import app
-from limn.providers import GeneratedImage, ImageProvider
+from limn.providers import GeneratedImage, ImageProvider, LoraInfo
 from tests.conftest import PNG_BYTES
 
 runner = CliRunner()
@@ -30,6 +30,16 @@ class FakeProvider(ImageProvider):
     def generate(self, request):
         self.requests.append(request)
         return [GeneratedImage(PNG_BYTES) for _ in range(request.count)]
+
+    def list_loras(self, request):
+        return [
+            LoraInfo(
+                name="styles/watercolor-v2",
+                trigger_phrase="w4t3rc0l0r style",
+                description="Soft watercolor washes.",
+            ),
+            LoraInfo(name="pixel-art-xl"),
+        ]
 
 
 @pytest.fixture
@@ -103,6 +113,29 @@ def test_default_output_name(isolated_config, fake_provider):
     result = runner.invoke(app, ["A Red Bicycle!", "--provider", "fake"])
     assert result.exit_code == 0, result.output
     assert (cwd / "a-red-bicycle.png").exists()
+
+
+def test_models_loras_flag(isolated_config, fake_provider):
+    result = runner.invoke(app, ["models", "--loras", "--provider", "fake"])
+    assert result.exit_code == 0, result.output
+    assert "styles/watercolor-v2" in result.output
+    assert "trigger: w4t3rc0l0r style" in result.output
+    assert "Soft watercolor washes." in result.output
+    assert "pixel-art-xl" in result.output
+
+
+def test_models_loras_unsupported_provider_errors(isolated_config, monkeypatch):
+    # A provider without LoRA support (the base default) exits non-zero.
+    class NoLoraProvider(ImageProvider):
+        name = "nolora"
+
+        def generate(self, request):
+            return []
+
+    monkeypatch.setattr("limn.core.get_provider", lambda name: NoLoraProvider())
+    result = runner.invoke(app, ["models", "--loras", "--provider", "nolora"])
+    assert result.exit_code == 1
+    assert "no LoRA support" in all_output(result)
 
 
 def test_init_config(isolated_config):

@@ -6,6 +6,7 @@ from limn.providers.base import (
     GeneratedImage,
     GenerateRequest,
     ImageProvider,
+    LoraInfo,
     ProviderError,
 )
 from limn.providers.gemini import GeminiProvider
@@ -16,6 +17,7 @@ __all__ = [
     "GeneratedImage",
     "GenerateRequest",
     "ImageProvider",
+    "LoraInfo",
     "ProviderError",
     "PROVIDERS",
     "get_provider",
