@@ -140,8 +140,8 @@ your provider in Settings (server URL / API key — bring your own), type,
 generate. First launch bootstraps a private Python runtime via `uv` (~a
 minute, no system Python needed); images save to `Pictures/Limn`. Installers
 for macOS / Windows / Linux are built by CI from [`desktop/`](desktop/) —
-grab them from the GitHub releases page. Builds are unsigned for now: on
-macOS right-click → Open the first time; on Windows "More info → Run anyway".
+grab them from the GitHub releases page. macOS builds are code signed and
+notarized; Windows builds are unsigned ("More info → Run anyway").
 
 ## Roadmap
 

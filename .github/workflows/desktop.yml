@@ -5,9 +5,8 @@
 # /releases/latest, so releases go straight out), or run manually from the
 # Actions tab (artifacts only, no release).
 #
-# Builds are UNSIGNED — no signing certs are configured. macOS users must
-# right-click > Open (or `xattr -dr com.apple.quarantine /Applications/Limn.app`);
-# Windows SmartScreen needs "More info > Run anyway".
+# macOS builds are code signed and notarized via the APPLE_* repo secrets.
+# Windows builds are unsigned; SmartScreen needs "More info > Run anyway".
 name: desktop
 
 on:
@@ -57,6 +56,13 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing + notarization (no-ops on linux/windows)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: desktop
           # On tag pushes, attach installers to a draft release; on manual
@@ -67,9 +73,8 @@ jobs:
           releaseBody: |
             Limn desktop — privacy-first text-to-image, bring your own provider.
 
-            **Unsigned builds**: on macOS right-click the app > Open the first
-            time (or remove quarantine: `xattr -dr com.apple.quarantine /Applications/Limn.app`);
-            on Windows choose "More info > Run anyway".
+            macOS builds are code signed and notarized by Apple — they open
+            normally on first launch. On Windows choose "More info > Run anyway".
 
             First launch downloads a private Python runtime (~1 min), then
             configure your provider in Settings. Nothing leaves your machine
