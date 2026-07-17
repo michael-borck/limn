@@ -95,3 +95,4 @@ jobs:
             desktop/src-tauri/target/**/release/bundle/**/*.msi
             desktop/src-tauri/target/**/release/bundle/**/*.exe
           if-no-files-found: warn
+          retention-days: 5
