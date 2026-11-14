@@ -1,20 +1,112 @@
-name: Release desktop
+# Build Limn desktop installers for macOS / Windows / Linux.
+#
+# Trigger: push a tag like desktop-v0.1.0 (creates and PUBLISHES a GitHub
+# release with the installers attached — the landing page links to
+# /releases/latest, so releases go straight out), or run manually from the
+# Actions tab (artifacts only, no release).
+#
+# macOS builds are code signed and notarized via the APPLE_* repo secrets.
+# Windows builds are unsigned; SmartScreen needs "More info > Run anyway".
+name: desktop
 
 on:
   push:
-    tags: ['v*']
+    tags: ["desktop-v*"]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  release:
-    uses: michael-borck/actions/.github/workflows/tauri-release.yml@main
-    secrets: inherit
-    with:
-      product-name: Limn
-      preflight-command: ''
-      install-command: npm install --no-audit --no-fund
-      cache: ''
-      updater: false
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon
+            args: "--target aarch64-apple-darwin"
+            target: aarch64-apple-darwin
+          - platform: macos-latest # Intel
+            args: "--target x86_64-apple-darwin"
+            target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            target: ""
+          - platform: windows-latest
+            args: ""
+            target: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux webview deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf build-essential libgtk-3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Prepare App Store Connect API key
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          if [ -n "$APPLE_API_KEY_CONTENT" ] && [ -n "$APPLE_API_KEY" ]; then
+            mkdir -p ~/.appstoreconnect/private_keys
+            printf '%s' "$APPLE_API_KEY_CONTENT" | openssl base64 -d -A               > ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8
+            chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8
+          else
+            echo "No API key secrets; notarization will fall back to Apple ID"
+          fi
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing + notarization (no-ops on linux/windows)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: desktop
+          # On tag pushes, attach installers to a draft release; on manual
+          # runs these are empty and artifacts are uploaded instead.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && 'Limn Desktop __VERSION__' || '' }}
+          releaseDraft: false
+          releaseBody: |
+            Limn desktop — privacy-first text-to-image, bring your own provider.
+
+            macOS builds are code signed and notarized by Apple — they open
+            normally on first launch. On Windows choose "More info > Run anyway".
+
+            First launch downloads a private Python runtime (~1 min), then
+            configure your provider in Settings. Nothing leaves your machine
+            except generation requests to the provider you set.
+          args: ${{ matrix.args }}
+
+      - name: Upload artifacts (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: limn-desktop-${{ matrix.platform }}${{ matrix.target && '-' }}${{ matrix.target }}
+          path: |
+            desktop/src-tauri/target/**/release/bundle/**/*.dmg
+            desktop/src-tauri/target/**/release/bundle/**/*.app.tar.gz
+            desktop/src-tauri/target/**/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/**/release/bundle/**/*.deb
+            desktop/src-tauri/target/**/release/bundle/**/*.rpm
+            desktop/src-tauri/target/**/release/bundle/**/*.msi
+            desktop/src-tauri/target/**/release/bundle/**/*.exe
+          if-no-files-found: warn
+          retention-days: 5
