@@ -1,6 +1,6 @@
 [package]
 name = "limn-desktop"
-version = "0.1.4"
+version = "0.1.5"
 description = "Limn — privacy-first text-to-image, on your desktop"
 authors = ["Michael Borck <michael.borck@curtin.edu.au>"]
 license = "MIT"
