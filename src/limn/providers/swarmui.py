@@ -43,6 +43,7 @@ def _clean_text(value: Any) -> str | None:
 
 class SwarmUIProvider(ImageProvider):
     name = "swarmui"
+    supports_advanced = True
 
     def _connection(self, request: GenerateRequest) -> tuple[str, dict[str, str]]:
         base_url = request.base_url or os.getenv("SWARMUI_BASE_URL")

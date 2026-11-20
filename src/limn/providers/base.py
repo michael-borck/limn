@@ -67,6 +67,10 @@ class ImageProvider(ABC):
     """One backend: turn a GenerateRequest into image bytes."""
 
     name: str = "base"
+    # Whether this backend honors the advanced generation controls (LoRA /
+    # cfg / steps / sampler / scheduler). SwarmUI does; hosted image APIs
+    # generally ignore them (see unsupported()).
+    supports_advanced: bool = False
 
     @abstractmethod
     def generate(self, request: GenerateRequest) -> list[GeneratedImage]:

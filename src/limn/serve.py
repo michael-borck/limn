@@ -15,7 +15,7 @@ from __future__ import annotations
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -29,6 +29,7 @@ from limn.config import ConfigurationError, resolve_settings
 from limn.core import (
     generate,
     image_extension,
+    list_loras,
     list_models,
     parse_size,
     slugify,
@@ -64,6 +65,9 @@ class SessionImage:
     provider: str
     data: bytes
     created: float
+    # Effective, non-secret request params (model/size/seed/negative/advanced)
+    # so the UI's "Again" can replay them. Never includes api_key/base_url.
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 class GeneratePayload(BaseModel):
@@ -74,6 +78,12 @@ class GeneratePayload(BaseModel):
     count: int = Field(default=1, ge=1, le=10)
     seed: int | None = None
     negative: str | None = None
+    # Advanced controls (SwarmUI only; other providers warn + ignore).
+    loras: list[str] | None = None  # "name:weight" entries
+    cfg_scale: float | None = None
+    steps: int | None = None
+    sampler: str | None = None
+    scheduler: str | None = None
 
 
 class SavePayload(BaseModel):
@@ -86,6 +96,41 @@ class ModelsPayload(BaseModel):
     api_key: str | None = None
 
 
+class LorasPayload(BaseModel):
+    provider: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+
+
+def _params(settings: dict[str, Any], seed: int | None) -> dict[str, Any]:
+    """The reproducible, non-secret request params for one generated image."""
+    params: dict[str, Any] = {"provider": settings.get("provider")}
+    if settings.get("model"):
+        params["model"] = settings["model"]
+    size = settings.get("size")
+    if size:
+        params["size"] = [int(size[0]), int(size[1])]
+    if settings.get("count"):
+        params["count"] = settings["count"]
+    if seed is not None:
+        params["seed"] = seed
+    for key in ("negative", "cfg_scale", "steps", "sampler", "scheduler"):
+        if settings.get(key) is not None:
+            params[key] = settings[key]
+    raw_loras = settings.get("loras")
+    if raw_loras:
+        # Normalize whatever shape config used into "name:weight" strings so
+        # the UI can replay them through GeneratePayload.
+        loras: list[str] = []
+        for item in raw_loras:
+            if isinstance(item, str):
+                loras.append(item)
+            elif isinstance(item, dict):
+                loras.append(f"{item['name']}:{item.get('weight', 1):g}")
+        params["loras"] = loras
+    return params
+
+
 def _meta(item: SessionImage) -> dict[str, Any]:
     return {
         "id": item.id,
@@ -93,6 +138,7 @@ def _meta(item: SessionImage) -> dict[str, Any]:
         "seed": item.seed,
         "provider": item.provider,
         "created": item.created,
+        "params": item.params,
     }
 
 
@@ -200,6 +246,11 @@ def create_app(
             "version": __version__,
             "provider": config.get("provider"),
             "providers": sorted(set(PROVIDERS)),
+            # Which providers honor the advanced controls, so the UI can gate
+            # the panel (e.g. hide LoRA/cfg for OpenAI/Gemini).
+            "advanced": {
+                name: cls.supports_advanced for name, cls in PROVIDERS.items()
+            },
             "size": config.get("size") or [1024, 1024],
             "demo": demo,
         }
@@ -232,6 +283,39 @@ def create_app(
             return {"models": list_models(settings), "provider": provider_name}
         except (ProviderError, ConfigurationError, ValueError) as e:
             raise HTTPException(status_code=502, detail=str(e)) from e
+
+    @app.post("/api/loras", dependencies=[Depends(require_token)])
+    def api_loras(payload: LorasPayload | None = None) -> dict[str, Any]:
+        overrides = payload or LorasPayload()
+        # Demo ignores overrides (visitors must not reach other backends/keys).
+        provider_name = (
+            config.get("provider")
+            if demo
+            else overrides.provider or config.get("provider")
+        )
+        if not provider_name:
+            raise HTTPException(status_code=400, detail="No provider configured.")
+        settings = resolve_settings(config, str(provider_name))
+        if not demo:
+            if overrides.base_url:
+                settings["base_url"] = overrides.base_url
+            if overrides.api_key:
+                settings["api_key"] = overrides.api_key
+        try:
+            loras = list_loras(settings)
+        except (ProviderError, ConfigurationError, ValueError) as e:
+            raise HTTPException(status_code=502, detail=str(e)) from e
+        return {
+            "provider": provider_name,
+            "loras": [
+                {
+                    "name": lora.name,
+                    "trigger_phrase": lora.trigger_phrase,
+                    "description": lora.description,
+                }
+                for lora in loras
+            ],
+        }
 
     @app.get("/api/images", dependencies=[Depends(require_token)])
     def api_list() -> dict[str, Any]:
@@ -269,6 +353,19 @@ def create_app(
             settings["seed"] = payload.seed
         if payload.negative:
             settings["negative"] = payload.negative
+        # Advanced controls: accepted outside demo only (demo is locked to the
+        # server's config so visitors can't change how spend is generated).
+        if not demo:
+            if payload.loras:
+                settings["loras"] = payload.loras
+            if payload.cfg_scale is not None:
+                settings["cfg_scale"] = payload.cfg_scale
+            if payload.steps is not None:
+                settings["steps"] = payload.steps
+            if payload.sampler:
+                settings["sampler"] = payload.sampler
+            if payload.scheduler:
+                settings["scheduler"] = payload.scheduler
 
         if demo:
             settings["count"] = 1
@@ -294,6 +391,7 @@ def create_app(
                     provider=str(provider_name),
                     data=image.data,
                     created=time.time(),
+                    params=_params(settings, image.seed),
                 )
                 store[item.id] = item
                 items.append(_meta(item))

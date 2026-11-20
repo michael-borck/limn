@@ -56,6 +56,24 @@
     border: 1px solid var(--line); border-radius: 6px; padding: .3rem .5rem; width: 9.5rem;
   }
   .opts input[type=number] { width: 5.5rem; }
+  .opts label.check { flex-direction: row; align-items: center; gap: .35rem; }
+  .opts label.check input { width: auto; }
+  .adv-note { flex-basis: 100%; color: var(--danger); font-size: .8rem; }
+  .loras { padding: .35rem 0 .5rem; max-width: 30rem; }
+  .loras-head {
+    display: flex; align-items: center; gap: .5rem; font-size: .8rem;
+    color: var(--muted); margin-bottom: .35rem;
+  }
+  .loras-head button { font-size: .8rem; padding: .2rem .5rem; }
+  .lora-row { display: flex; gap: .4rem; margin-bottom: .35rem; }
+  .lora-row input {
+    font: inherit; font-size: .9rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: .3rem .5rem;
+  }
+  .lora-row .lora-name { flex: 1; min-width: 0; }
+  .lora-row .lora-weight { width: 5rem; }
+  .lora-row button { flex: none; padding: .3rem .55rem; }
+  .hidden { display: none !important; }
   #error {
     display: none; margin: 1rem 0 0; padding: .6rem .9rem; border-radius: 8px;
     background: color-mix(in srgb, var(--danger) 12%, transparent);
@@ -133,7 +151,29 @@
           <label>size <input id="size" placeholder="1024x1024"></label>
           <label>count <input id="count" type="number" min="1" max="10" value="1"></label>
           <label>seed <input id="seed" type="number" placeholder="random"></label>
+          <label class="check" title="Reuse the same seed for reproducible results">
+            <input id="seed-lock" type="checkbox"> lock
+          </label>
           <label>negative <input id="negative" placeholder="text, watermark"></label>
+        </div>
+      </details>
+      <details id="advanced-details">
+        <summary>Advanced</summary>
+        <div id="advanced-note" class="adv-note"></div>
+        <div class="opts">
+          <label>cfg <input id="cfg" type="number" step="0.5" placeholder="5"></label>
+          <label>steps <input id="steps" type="number" min="1" placeholder="30"></label>
+          <label>sampler <input id="sampler" placeholder="euler"></label>
+          <label>scheduler <input id="scheduler" placeholder="normal"></label>
+        </div>
+        <div class="loras">
+          <div class="loras-head">
+            <span>LoRAs</span>
+            <button id="load-loras" type="button" title="Fetch LoRAs from this provider">⟳</button>
+          </div>
+          <datalist id="lora-list"></datalist>
+          <div id="lora-rows"></div>
+          <button id="add-lora" type="button">+ LoRA</button>
         </div>
       </details>
       <span class="hint">⌘⏎ / Ctrl⏎ to generate</span>
@@ -150,6 +190,8 @@
 const $ = id => document.getElementById(id);
 const gallery = $("gallery"), errBox = $("error");
 let DEMO = false;
+let CFG = {};
+let lastSeed = null;
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -212,22 +254,87 @@ function addCard(item) {
     card.remove();
     if (!gallery.children.length) $("empty").style.display = "";
   };
-  card.querySelector(".again").onclick = () => generate(item.prompt, true);
+  card.querySelector(".again").onclick = () => generate(item.prompt, item.params);
 
   gallery.prepend(card);
 }
 
-async function generate(promptOverride, dropSeed) {
+function readLoras() {
+  const out = [];
+  document.querySelectorAll("#lora-rows .lora-row").forEach((row) => {
+    const name = row.querySelector(".lora-name").value.trim();
+    const weight = row.querySelector(".lora-weight").value.trim();
+    if (name) out.push(weight ? `${name}:${weight}` : name);
+  });
+  return out;
+}
+
+function readForm() {
+  const p = { count: parseInt($("count").value || "1", 10) };
+  if ($("provider").value) p.provider = $("provider").value;
+  if ($("model").value.trim()) p.model = $("model").value.trim();
+  if ($("size").value.trim()) p.size = $("size").value.trim();
+  if ($("negative").value.trim()) p.negative = $("negative").value.trim();
+  // Only send advanced controls to providers that honor them.
+  const prov = $("provider").value || CFG.provider;
+  const advancedOk = !CFG.advanced || CFG.advanced[prov] !== false;
+  if (advancedOk) {
+    const loras = readLoras();
+    if (loras.length) p.loras = loras;
+    if ($("cfg").value !== "") p.cfg_scale = parseFloat($("cfg").value);
+    if ($("steps").value !== "") p.steps = parseInt($("steps").value, 10);
+    if ($("sampler").value.trim()) p.sampler = $("sampler").value.trim();
+    if ($("scheduler").value.trim()) p.scheduler = $("scheduler").value.trim();
+  }
+  if ($("seed").value !== "") p.seed = parseInt($("seed").value, 10);
+  return p;
+}
+
+function seedLocked() { return $("seed-lock").checked; }
+
+function refreshAdvancedSupport() {
+  const prov = $("provider").value || CFG.provider;
+  const ok = !CFG.advanced || CFG.advanced[prov] !== false;
+  const note = $("advanced-note");
+  const controls = $("advanced-details").querySelectorAll("input, button");
+  if (ok) {
+    note.textContent = "";
+    controls.forEach((c) => (c.disabled = false));
+  } else {
+    note.textContent = "Advanced controls need a provider that supports them " +
+      "(e.g. SwarmUI). " + (prov || "This provider") +
+      " ignores LoRA / cfg / steps / sampler / scheduler.";
+    controls.forEach((c) => (c.disabled = true));
+  }
+}
+
+async function generate(promptOverride, paramsOverride) {
   clearError();
   const prompt = (promptOverride ?? $("prompt").value).trim();
   if (!prompt) { $("prompt").focus(); return; }
 
-  const payload = { prompt, count: parseInt($("count").value || "1", 10) };
-  if ($("provider").value) payload.provider = $("provider").value;
-  if ($("model").value.trim()) payload.model = $("model").value.trim();
-  if ($("size").value.trim()) payload.size = $("size").value.trim();
-  if (!dropSeed && $("seed").value !== "") payload.seed = parseInt($("seed").value, 10);
-  if ($("negative").value.trim()) payload.negative = $("negative").value.trim();
+  const p = paramsOverride ? { ...paramsOverride } : readForm();
+  if (paramsOverride) {
+    // "Again": replay this image's settings, but one image, and (unless the
+    // seed is locked) a fresh seed for a new variation.
+    p.count = 1;
+    if (!seedLocked() || p.seed == null) delete p.seed;
+  } else if (seedLocked() && p.seed == null && lastSeed != null) {
+    p.seed = lastSeed;
+  }
+
+  const payload = { prompt };
+  if (p.count != null) payload.count = p.count;
+  if (p.provider) payload.provider = p.provider;
+  if (p.model) payload.model = p.model;
+  if (p.size) payload.size = p.size;
+  if (p.negative) payload.negative = p.negative;
+  if (p.loras && p.loras.length) payload.loras = p.loras;
+  if (p.cfg_scale != null) payload.cfg_scale = p.cfg_scale;
+  if (p.steps != null) payload.steps = p.steps;
+  if (p.sampler) payload.sampler = p.sampler;
+  if (p.scheduler) payload.scheduler = p.scheduler;
+  if (p.seed != null) payload.seed = p.seed;
 
   const go = $("go");
   go.disabled = true; go.textContent = "Limning…";
@@ -245,6 +352,7 @@ async function generate(promptOverride, dropSeed) {
     });
     pending.remove();
     images.forEach(addCard);
+    if (images.length && images[0].seed != null) lastSeed = images[0].seed;
   } catch (err) {
     pending.remove();
     if (!gallery.children.length) $("empty").style.display = "";
@@ -304,24 +412,82 @@ $("prompt").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
 });
 
+function addLoraRow(name = "", weight = "1") {
+  const row = document.createElement("div");
+  row.className = "lora-row";
+  const nameInput = document.createElement("input");
+  nameInput.className = "lora-name";
+  nameInput.setAttribute("list", "lora-list");
+  nameInput.placeholder = "name";
+  nameInput.value = name;
+  const weightInput = document.createElement("input");
+  weightInput.className = "lora-weight";
+  weightInput.type = "number";
+  weightInput.step = "0.05";
+  weightInput.min = "-2";
+  weightInput.max = "2";
+  weightInput.value = weight;
+  weightInput.title = "weight";
+  const del = document.createElement("button");
+  del.type = "button";
+  del.title = "Remove";
+  del.textContent = "✕";
+  del.onclick = () => row.remove();
+  row.append(nameInput, weightInput, del);
+  $("lora-rows").appendChild(row);
+  return nameInput;
+}
+
+$("add-lora").onclick = () => { addLoraRow().focus(); };
+
+$("load-loras").onclick = async () => {
+  clearError();
+  const btn = $("load-loras");
+  btn.disabled = true;
+  try {
+    const body = {};
+    if ($("provider").value) body.provider = $("provider").value;
+    const { loras } = await api("/api/loras", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    $("lora-list").innerHTML = "";
+    for (const lora of loras) {
+      const opt = document.createElement("option");
+      opt.value = lora.name;
+      if (lora.trigger_phrase) opt.label = "trigger: " + lora.trigger_phrase;
+      $("lora-list").appendChild(opt);
+    }
+    if (!loras.length) showError("The provider reported no LoRAs.");
+  } catch (err) {
+    showError("Could not list LoRAs: " + err.message);
+  } finally { btn.disabled = false; }
+};
+
+$("provider").addEventListener("change", refreshAdvancedSupport);
+
 (async function init() {
   try {
-    const cfg = await api("/api/config");
-    DEMO = !!cfg.demo;
+    CFG = await api("/api/config");
+    DEMO = !!CFG.demo;
     if (DEMO) {
       $("demo-banner").style.display = "block";
       // Provider, model and count are locked server-side in demo mode.
       $("provider").closest("label").style.display = "none";
       $("count").closest("label").style.display = "none";
+      // Advanced controls are ignored in demo mode.
+      $("advanced-details").classList.add("hidden");
       resolveDownloadLinks();
     }
-    for (const name of cfg.providers) {
+    for (const name of CFG.providers) {
       const opt = document.createElement("option");
       opt.value = name;
-      opt.textContent = name + (name === cfg.provider ? " (default)" : "");
+      opt.textContent = name + (name === CFG.provider ? " (default)" : "");
       $("provider").appendChild(opt);
     }
-    if (Array.isArray(cfg.size)) $("size").placeholder = cfg.size.join("x");
+    if (Array.isArray(CFG.size)) $("size").placeholder = CFG.size.join("x");
+    refreshAdvancedSupport();
     const { images } = await api("/api/images");
     images.forEach(addCard);
   } catch (err) { showError(err.message); }

@@ -70,6 +70,26 @@ def test_demo_locks_provider_model_count_and_size(provider, tmp_path):
     assert request.size == (1024, 1024)
 
 
+def test_demo_ignores_advanced(provider, tmp_path):
+    client = demo_client(provider, tmp_path)
+    response = client.post(
+        "/api/generate",
+        json={
+            "prompt": "a fox",
+            "cfg_scale": 9,
+            "steps": 99,
+            "sampler": "ddim",
+            "loras": ["style:1.0"],
+        },
+    )
+    assert response.status_code == 200
+    request = provider.requests[0]
+    assert request.cfg_scale is None
+    assert request.steps is None
+    assert request.sampler is None
+    assert request.loras is None
+
+
 def test_demo_rate_limit(provider, tmp_path):
     client = demo_client(provider, tmp_path, demo_images_per_hour=2)
     assert client.post("/api/generate", json={"prompt": "1"}).status_code == 200

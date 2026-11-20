@@ -13,6 +13,13 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.4: Web UI advanced options.** The serve page gained an "Advanced" panel
+(cfg / steps / sampler / scheduler + repeatable LoRA rows) gated by a new
+`ImageProvider.supports_advanced` capability (SwarmUI only); `/api/loras` lists
+a provider's LoRAs. `/api/generate` accepts the advanced fields (demo ignores
+them) and each session image stores non-secret `params` so "Again" replays the
+settings; a seed-lock checkbox controls seed reuse. 98 tests.
+
 **0.4.3: LoRA discovery.** `limn models --loras` lists the server's LoRAs with
 trigger phrase + description from SwarmUI model metadata (`LoraInfo` in
 `providers/base.py`, `SwarmUIProvider.list_loras`, `core.list_loras`). Other

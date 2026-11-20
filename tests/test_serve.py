@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from limn.providers import GeneratedImage, ImageProvider
+from limn.providers import GeneratedImage, ImageProvider, LoraInfo
 from limn.serve import create_app
 from tests.conftest import PNG_BYTES
 
@@ -49,6 +49,14 @@ def test_config_endpoint(client):
     data = client.get("/api/config").json()
     assert data["provider"] == "swarmui"
     assert "gemini" in data["providers"]
+
+
+def test_config_reports_advanced_support(client):
+    advanced = client.get("/api/config").json()["advanced"]
+    assert advanced["swarmui"] is True
+    # Hosted image APIs don't honor LoRA / cfg / steps / sampler / scheduler.
+    assert advanced["openai"] is False
+    assert advanced["gemini"] is False
 
 
 def test_generate_view_delete_lifecycle(client):
@@ -173,3 +181,85 @@ def test_token_gates_everything(tmp_path, monkeypatch):
         ).status_code
         == 401
     )
+
+
+class RecordingProvider(ImageProvider):
+    name = "swarmui"
+    supports_advanced = True
+
+    def __init__(self):
+        self.requests = []
+
+    def generate(self, request):
+        self.requests.append(request)
+        return [GeneratedImage(PNG_BYTES, seed=request.seed)]
+
+    def list_loras(self, request):
+        return [LoraInfo(name="pixel-art", trigger_phrase="in pixel art")]
+
+
+@pytest.fixture
+def recorder(tmp_path, monkeypatch):
+    provider = RecordingProvider()
+    monkeypatch.setattr("limn.core.get_provider", lambda name: provider)
+    client = TestClient(create_app({"provider": "swarmui"}, out_dir=tmp_path))
+    return client, provider
+
+
+def test_generate_passes_advanced_params(recorder):
+    client, provider = recorder
+    response = client.post(
+        "/api/generate",
+        json={
+            "prompt": "a fox",
+            "cfg_scale": 4.5,
+            "steps": 25,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "loras": ["pixel-art:0.8"],
+        },
+    )
+    assert response.status_code == 200
+    request = provider.requests[0]
+    assert request.cfg_scale == 4.5
+    assert request.steps == 25
+    assert request.sampler == "euler"
+    assert request.scheduler == "normal"
+    assert request.loras == [("pixel-art", 0.8)]
+
+
+def test_generate_returns_params_for_again(recorder):
+    client, _ = recorder
+    item = client.post(
+        "/api/generate",
+        json={"prompt": "a fox", "seed": 7, "cfg_scale": 4.5, "steps": 25},
+    ).json()["images"][0]
+    assert item["params"]["seed"] == 7
+    assert item["params"]["cfg_scale"] == 4.5
+    assert item["params"]["steps"] == 25
+
+
+def test_params_never_include_secrets(tmp_path, monkeypatch):
+    monkeypatch.setattr("limn.core.get_provider", lambda name: RecordingProvider())
+    app = create_app(
+        {"provider": "swarmui", "api_key": "sekret", "base_url": "https://x"},
+        out_dir=tmp_path,
+    )
+    item = TestClient(app).post(
+        "/api/generate", json={"prompt": "a fox"}
+    ).json()["images"][0]
+    assert "api_key" not in item["params"]
+    assert "base_url" not in item["params"]
+
+
+def test_loras_endpoint(recorder):
+    client, _ = recorder
+    data = client.post("/api/loras", json={}).json()
+    assert data["provider"] == "swarmui"
+    assert data["loras"] == [
+        {
+            "name": "pixel-art",
+            "trigger_phrase": "in pixel art",
+            "description": None,
+        }
+    ]
