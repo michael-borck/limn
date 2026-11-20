@@ -13,6 +13,11 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.6: Copy pass + README hero.** Ran the humanizer over the docs and UI copy
+(README, SPEC, deploy/desktop docs, serve + desktop UI): no em dashes,
+decorative bold or staged phrasing. README now leads with the landing hero
+screenshot. Desktop 0.1.6 pins `LIMN_VERSION=0.4.6`.
+
 **0.4.5: Domain move + demo banner.** The landing page and hosted demo now live
 on limn.borck.dev / demo.limn.borck.dev (previously `*.eduserver.au`); the demo
 banner points at the landing page for the desktop app and lists `pip install
