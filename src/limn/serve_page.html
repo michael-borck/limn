@@ -118,16 +118,16 @@
 <div class="wrap">
   <header>
     <h1>🖼️ Limn</h1>
-    <small>type a description, get an image — yours, locally</small>
+    <small>type a description, get an image. yours, saved locally.</small>
   </header>
 
   <div id="demo-banner">
-    <strong>Shared demo</strong> — a few images per hour, nothing is stored
-    and images vanish after a while. For unlimited, fully private use, get the
-    desktop app for macOS, Windows or Linux at
-    <a href="https://limn.borck.dev" target="_blank" rel="noopener">limn.borck.dev</a>
-    — or run Limn yourself: <code>pip install limn</code>
-    (<a href="https://pypi.org/project/limn/" target="_blank" rel="noopener">PyPI</a> ·
+    <strong>Shared demo</strong>: a few images per hour, nothing is stored, and
+    images vanish after a while. For unlimited, private use, get the desktop
+    app for macOS, Windows or Linux at
+    <a href="https://limn.borck.dev" target="_blank" rel="noopener">limn.borck.dev</a>,
+    or run Limn yourself with <code>pip install limn</code>
+    (<a href="https://pypi.org/project/limn/" target="_blank" rel="noopener">PyPI</a>,
     <a href="https://github.com/michael-borck/limn" target="_blank" rel="noopener">GitHub</a>)
   </div>
 
@@ -180,7 +180,7 @@
   <div id="error"></div>
 
   <div id="gallery"></div>
-  <p class="empty" id="empty">Nothing yet. Images appear here — kept in memory only until you save them.</p>
+  <p class="empty" id="empty">Nothing yet. Images appear here and stay in memory until you save them.</p>
 </div>
 
 <script>
@@ -242,7 +242,7 @@ function addCard(item) {
       const { path } = await api(url + "/save", { method: "POST",
         headers: { "Content-Type": "application/json" }, body: "{}" });
       const saved = card.querySelector(".saved");
-      saved.textContent = "saved → " + path;
+      saved.textContent = "saved to " + path;
       saved.style.display = "block";
       e.target.textContent = "Saved";
     } catch (err) { showError("Save failed: " + err.message); }

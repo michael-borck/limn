@@ -1,19 +1,20 @@
 # Hosting the Limn demo
 
 The demo (SPEC §3) is a shared, rate-limited, non-storing instance of
-`limn serve` — try a few images in the browser, install locally for real use.
+`limn serve`. Try a few images in the browser, then install locally for real
+use.
 
 ## What `--demo` changes
 
-- **No token** — friction-free, guarded by limits instead.
-- **Rate limit** — 10 images/hour per client IP (X-Forwarded-For aware).
-- **Locked spend** — provider and model come from the server config only;
-  one image per request, max 1024px.
-- **Non-storing** — server-side Save is disabled (403); the UI offers
-  Download instead. Gallery entries live in RAM and expire after 15 min.
-- **Banner** — the page tells visitors it's a demo and how to install.
+- No token. The demo is friction-free, guarded by limits instead.
+- Rate limit of 10 images per hour per client IP (X-Forwarded-For aware).
+- Locked spend: provider and model come from the server config only, with one
+  image per request and a max of 1024px.
+- Non-storing: server-side Save is disabled (403) and the UI offers Download
+  instead. Gallery entries live in RAM and expire after 15 minutes.
+- A banner tells visitors it's a demo and how to install.
 
-## Run it — Docker Compose (recommended for a VPS)
+## Run it with Docker Compose (recommended for a VPS)
 
 Everything lives in [`deploy/`](../deploy): a compose file that builds the
 image from this repo, plus templates for config and secrets. On the VPS:
@@ -31,9 +32,9 @@ $EDITOR .env        # SWARMUI_TOKEN / cloud keys; LIMN_DEMO=1 is preset
 docker compose up -d
 ```
 
-Remove `LIMN_DEMO` from `.env` to run a private (non-demo) instance
-instead: binding 0.0.0.0 inside the container auto-generates an access
-token — read it with `docker compose logs limn`.
+Remove `LIMN_DEMO` from `.env` to run a private (non-demo) instance instead.
+Binding 0.0.0.0 inside the container auto-generates an access token; read it
+with `docker compose logs limn`.
 
 Plain `docker run` works too:
 
@@ -47,7 +48,7 @@ docker run -d --name limn-demo --restart unless-stopped \
   limn
 ```
 
-## Run it — bare (pip + systemd)
+## Run it bare (pip and systemd)
 
 ```bash
 pip install "limn[serve]"
@@ -63,9 +64,10 @@ limn serve --demo --host 127.0.0.1 --port 5466
 # or: LIMN_DEMO=1 limn serve ...
 ```
 
-Put a reverse proxy (nginx / Nginx Proxy Manager / Caddy) in front for TLS,
-e.g. `demo.limn.borck.dev` → `127.0.0.1:5466`. The rate limiter reads the
-first `X-Forwarded-For` entry, which every mainstream proxy sets.
+Put a reverse proxy (nginx, Nginx Proxy Manager or Caddy) in front for TLS,
+for example `demo.limn.borck.dev` pointing at `127.0.0.1:5466`. The rate
+limiter reads the first `X-Forwarded-For` entry, which every mainstream proxy
+sets.
 
 ### systemd unit
 
@@ -90,12 +92,12 @@ WantedBy=multi-user.target
 
 ## Cost / load ceiling
 
-Worst case per IP: 10 images/hour.
+Worst case per IP is 10 images per hour.
 
-- **SwarmUI (self-hosted):** no dollar cost — the limit protects your GPU
-  queue instead. Each demo image is one ≤1024px job on your server.
-- **Cloud (Imagen Fast ~$0.02/image):** ~$0.20/hour per abusive IP; watch
-  the provider's billing dashboard.
+- SwarmUI (self-hosted): no dollar cost. The limit protects your GPU queue
+  instead, and each demo image is one ≤1024px job on your server.
+- Cloud (Imagen Fast at ~$0.02 per image): about $0.20 per hour per abusive IP.
+  Watch the provider's billing dashboard.
 
 Drop `DEMO_IMAGES_PER_HOUR` in `limn/serve.py` (or add proxy-level rate
 limits) if needed.

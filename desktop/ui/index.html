@@ -91,7 +91,7 @@
 
       <div id="settings" class="hidden">
         <h1>Your image provider</h1>
-        <p class="sub">Bring your own — prompts go only to the provider you set here. Saved to <code>~/.limn.yaml</code>.</p>
+        <p class="sub">Bring your own. Prompts go only to the provider you set here, and the settings are saved to <code>~/.limn.yaml</code>.</p>
         <div class="card">
           <label for="provider">Provider</label>
           <select id="provider">
@@ -121,7 +121,7 @@
           </div>
           <div id="err"></div>
         </div>
-        <p class="note">Privacy: no account, no telemetry. The only network traffic is the
+        <p class="note">Privacy: no account and no telemetry. The only network traffic is the
         generation request to this provider. Images are saved to your Pictures/Limn folder.</p>
       </div>
     </div>
@@ -142,7 +142,7 @@ listen("status", e => { $("status").textContent = e.payload; $("boot-msg").textC
 function showApp() {
   $("overlay").classList.add("hidden");
   $("app").style.display = "block";
-  $("status").textContent = "ready — local server on 127.0.0.1:" + serverPort;
+  $("status").textContent = "ready, local server on 127.0.0.1:" + serverPort;
 }
 
 function showSettings(cancellable) {
@@ -197,7 +197,7 @@ async function boot(update) {
 $("btn-models").onclick = async () => {
   $("err").textContent = "";
   const btn = $("btn-models");
-  if (!serverPort) { $("err").textContent = "Still starting up — try again in a moment."; return; }
+  if (!serverPort) { $("err").textContent = "Still starting up. Try again in a moment."; return; }
   btn.disabled = true; btn.textContent = "Fetching…";
   try {
     const body = { provider: $("provider").value };
@@ -271,7 +271,7 @@ async function checkForUpdate() {
       }
     };
   } catch (e) {
-    // No update feed configured, or offline — stay quiet.
+    // No update feed configured, or offline; stay quiet.
   }
 }
 
