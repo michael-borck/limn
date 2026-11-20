@@ -67,7 +67,7 @@ the pattern explored for slide-stream. Not on the Mac App Store (runtime
 download rules); distributed as a signed `.dmg` / installer.
 
 ### Demo — "try before install"
-A hosted instance (`app.limn.<domain>`) that is **rate-limited and
+A hosted instance (`demo.limn.borck.dev`) that is **rate-limited and
 non-storing**: generate a few images to try it, nothing saved server-side, with
 a banner inviting users to install locally for full control and privacy. Same
 `--demo` flag idea as slide-stream.

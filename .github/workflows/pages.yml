@@ -1,4 +1,4 @@
-# Deploy the landing page (landing/) to GitHub Pages — https://limn.eduserver.au
+# Deploy the landing page (landing/) to GitHub Pages — https://limn.borck.dev
 name: pages
 
 on:

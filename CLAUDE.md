@@ -13,6 +13,11 @@ desktop app with bring-your-own-provider, plus a rate-limited, non-storing demo.
 
 ## Current status
 
+**0.4.5: Domain move + demo banner.** The landing page and hosted demo now live
+on limn.borck.dev / demo.limn.borck.dev (previously `*.eduserver.au`); the demo
+banner points at the landing page for the desktop app and lists `pip install
+limn` as the terminal option. README/SPEC/deploy docs updated.
+
 **0.4.4: Web UI advanced options.** The serve page gained an "Advanced" panel
 (cfg / steps / sampler / scheduler + repeatable LoRA rows) gated by a new
 `ImageProvider.supports_advanced` capability (SwarmUI only); `/api/loras` lists
@@ -78,7 +83,7 @@ aware), provider+model locked to server config (visitors can't route spend),
 count=1, size clamped ≤1024px, Save returns 403 (UI swaps to Download with
 Content-Disposition), gallery entries expire after 15 min (lazy eviction),
 banner with pip-install nudge. Deploy notes in docs/demo-deploy.md. The
-actual hosting (app.limn.<domain>, reverse proxy) is infra the user does.
+actual hosting (demo.limn.borck.dev, reverse proxy) is infra the user does.
 
 **M2 (web UI) done: `limn serve` shipped in 0.2.0.** `src/limn/serve.py` is a
 FastAPI app factory (`create_app(config, token, out_dir)`) + a self-contained
@@ -151,12 +156,13 @@ M3 (hosted demo), M4 (Tauri desktop). Release flow: bump version in
 
 `landing/` is a self-contained page deployed to GitHub Pages by
 `.github/workflows/pages.yml` (on push to main touching landing/**), custom
-domain limn.eduserver.au (CNAME file + Pages setting; DNS: CNAME limn ->
+domain limn.borck.dev (CNAME file + Pages setting; DNS: CNAME limn ->
 michael-borck.github.io). Download buttons resolve the latest release assets
 client-side via the GitHub API (asset names carry versions) with a
 releases-page fallback; visitor platform highlighted. Hero screenshots in
 landing/assets/*.webp were taken from a real session (regenerate via
-headless Chrome against `limn serve`). The demo banner in serve_page.html
-carries the same direct download links (no platform detect) + a link to the
-landing page. desktop.yml now PUBLISHES releases on desktop-v* tags
+headless Chrome against `limn serve`). The hosted demo lives at
+demo.limn.borck.dev; the demo banner in serve_page.html points to the landing
+page for the desktop app and mentions `pip install limn` as the terminal
+option. desktop.yml now PUBLISHES releases on desktop-v* tags
 (draft=false) because the landing page links /releases/latest.

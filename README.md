@@ -5,6 +5,10 @@
 A small, privacy-first tool that turns a text description into an image. Type a
 prompt, get a picture — no account, minimal options, bring your own provider.
 
+Try it in the browser at [demo.limn.borck.dev](https://demo.limn.borck.dev), or
+grab the desktop app for macOS, Windows and Linux at
+[limn.borck.dev](https://limn.borck.dev). Prefer the terminal?
+
 ```bash
 pip install limn
 
@@ -126,6 +130,7 @@ Binds `127.0.0.1` by default. Binding any other host requires a token
 
 ### Hosting a shared demo
 
+A live instance runs at [demo.limn.borck.dev](https://demo.limn.borck.dev).
 `limn serve --demo` (or `LIMN_DEMO=1`) runs a friction-free public instance
 with guardrails instead of a token: 10 images/hour per IP, provider/model
 locked to the server config, one ≤1024px image per request, server-side Save
@@ -140,8 +145,10 @@ your provider in Settings (server URL / API key — bring your own), type,
 generate. First launch bootstraps a private Python runtime via `uv` (~a
 minute, no system Python needed); images save to `Pictures/Limn`. Installers
 for macOS / Windows / Linux are built by CI from [`desktop/`](desktop/) —
-grab them from the GitHub releases page. macOS builds are code signed and
-notarized; Windows builds are unsigned ("More info → Run anyway").
+grab them from [limn.borck.dev](https://limn.borck.dev) (or the
+[GitHub releases page](https://github.com/michael-borck/limn/releases)). macOS
+builds are code signed and notarized; Windows builds are unsigned ("More info →
+Run anyway").
 
 ## Roadmap
 

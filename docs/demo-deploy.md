@@ -64,7 +64,7 @@ limn serve --demo --host 127.0.0.1 --port 5466
 ```
 
 Put a reverse proxy (nginx / Nginx Proxy Manager / Caddy) in front for TLS,
-e.g. `app.limn.example.org` → `127.0.0.1:5466`. The rate limiter reads the
+e.g. `demo.limn.borck.dev` → `127.0.0.1:5466`. The rate limiter reads the
 first `X-Forwarded-For` entry, which every mainstream proxy sets.
 
 ### systemd unit
