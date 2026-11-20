@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
+use tauri_plugin_updater::UpdaterExt;
 
 /// The limn release the runtime installs; bump together with PyPI releases.
 const LIMN_VERSION: &str = "0.4.3";
@@ -320,14 +321,55 @@ async fn restart_server(app: AppHandle) -> Result<u16, String> {
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Serialize)]
+struct UpdateInfo {
+    version: String,
+    current_version: String,
+    body: Option<String>,
+}
+
+/// Ask the release feed whether a newer build exists. `None` means up to date.
+/// Errors (offline, no update configured) are surfaced to the caller, which
+/// treats them as "no update" so startup is never blocked.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let updater = app.updater_builder().build().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version,
+        current_version: u.current_version,
+        body: u.body,
+    }))
+}
+
+/// Download and install the available update, then relaunch into it.
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    let updater = app.updater_builder().build().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Ok(());
+    };
+    status(&app, "Downloading update…");
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    // Windows exits the app itself after launching the installer; on
+    // macOS/Linux we relaunch into the freshly installed bundle.
+    app.restart();
+}
+
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Sidecar(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             get_settings,
             save_settings,
             start_server,
-            restart_server
+            restart_server,
+            check_update,
+            install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Limn")

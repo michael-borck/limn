@@ -80,6 +80,7 @@
 <header>
   <span class="title">🖼️ Limn</span>
   <span id="status">starting…</span>
+  <button id="btn-update" class="hidden" title="Install the latest version">⬇ Update</button>
   <button id="btn-settings" title="Provider settings">⚙ Settings</button>
 </header>
 <main>
@@ -247,6 +248,33 @@ $("btn-save").onclick = async () => {
 $("btn-cancel").onclick = () => { settingsOpen = false; if (serverPort) showApp(); };
 $("btn-settings").onclick = async () => { await loadSettingsForm(); showSettings(!!serverPort); };
 
+// Ask the release feed for a newer build. Silent when up to date or offline.
+async function checkForUpdate() {
+  try {
+    const u = await invoke("check_update");
+    if (!u) return;
+    const btn = $("btn-update");
+    btn.textContent = "⬇ Update to v" + u.version;
+    btn.classList.remove("hidden");
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = "Updating…";
+      $("status").textContent = "downloading update…";
+      try {
+        await invoke("install_update"); // relaunches (or exits) on success
+        $("status").textContent = "restarting…";
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "⬇ Update to v" + u.version;
+        $("status").textContent = "update failed";
+        alert("Update failed: " + e);
+      }
+    };
+  } catch (e) {
+    // No update feed configured, or offline — stay quiet.
+  }
+}
+
 (async function init() {
   const s = await loadSettingsForm();
   if (!s.provider) {
@@ -256,6 +284,7 @@ $("btn-settings").onclick = async () => { await loadSettingsForm(); showSettings
     showSettings(false);
   }
   await boot(false);
+  checkForUpdate();
 })();
 </script>
 </body>
