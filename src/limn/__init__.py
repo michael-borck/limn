@@ -1,3 +1,3 @@
 """Limn — a small, privacy-first text-to-image tool."""
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"

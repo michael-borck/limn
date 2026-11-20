@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, State};
 use tauri_plugin_updater::UpdaterExt;
 
 /// The limn release the runtime installs; bump together with PyPI releases.
-const LIMN_VERSION: &str = "0.4.4";
+const LIMN_VERSION: &str = "0.4.5";
 
 struct Sidecar(Mutex<Option<Child>>);
 
